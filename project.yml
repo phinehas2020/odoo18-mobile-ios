@@ -1,0 +1,43 @@
+name: MobileOdoo
+options:
+  bundleIdPrefix: com.odoo.mobile
+settings:
+  base:
+    DEVELOPMENT_TEAM: ""
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: 6.29.0
+targets:
+  MobileOdoo:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - MobileApp
+    # entitlements:
+    #   path: MobileApp/MobileOdoo.entitlements
+    #   properties:
+    #     aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.phinehasadams.odoomobile.app
+        INFOPLIST_FILE: MobileApp/Info.plist
+    dependencies:
+      - package: GRDB
+  MobileOdooTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - MobileAppTests
+    dependencies:
+      - target: MobileOdoo
+  MobileOdooUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - MobileOdooUITests
+    dependencies:
+      - target: MobileOdoo
