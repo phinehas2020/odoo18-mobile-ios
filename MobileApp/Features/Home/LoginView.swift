@@ -71,7 +71,13 @@ struct LoginView: View {
     }
 
     private func login() {
-        if let url = URL(string: serverURLText) {
+        // Auto-fix URL scheme
+        var urlString = serverURLText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !urlString.lowercased().hasPrefix("http://") && !urlString.lowercased().hasPrefix("https://") {
+            urlString = "https://" + urlString
+        }
+        
+        if let url = URL(string: urlString) {
             config.baseURL = url
         }
         Task {

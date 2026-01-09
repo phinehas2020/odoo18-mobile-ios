@@ -8,7 +8,12 @@ struct Endpoint {
 
     func url(baseURL: URL) -> URL {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
-        components?.path = baseURL.path + path
+        let basePath = baseURL.path.isEmpty ? "" : baseURL.path
+        let endpointPath = path.hasPrefix("/") ? path : "/" + path
+        let finalPath = basePath.hasSuffix("/") && endpointPath.hasPrefix("/") 
+            ? String(basePath.dropLast()) + endpointPath 
+            : basePath + endpointPath
+        components?.path = finalPath
         if !queryItems.isEmpty {
             components?.queryItems = queryItems
         }

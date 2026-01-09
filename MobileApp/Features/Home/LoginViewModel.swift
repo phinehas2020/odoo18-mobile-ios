@@ -41,7 +41,12 @@ final class LoginViewModel: ObservableObject {
         )
         do {
             let body = try DateCoding.encoder.encode(payload)
-            let endpoint = Endpoint(path: "/api/v1/auth/login", method: "POST", body: body)
+            let endpoint = Endpoint(
+                path: "/api/v1/auth/login",
+                method: "POST",
+                queryItems: [URLQueryItem(name: "db", value: database)],
+                body: body
+            )
             let response: AuthTokensResponse = try await client.send(endpoint)
             if response.companies.count > 1 {
                 pendingResponse = response
@@ -57,7 +62,8 @@ final class LoginViewModel: ObservableObject {
                 )
             }
         } catch {
-            errorMessage = "Login failed"
+            print("Login Error: \(error)")
+            errorMessage = "Login failed: \(error.localizedDescription)"
         }
     }
 
@@ -103,7 +109,8 @@ final class LoginViewModel: ObservableObject {
             pendingCompanies = []
             showCompanyPicker = false
         } catch {
-            errorMessage = "Company selection failed"
+            print("Company Selection Error: \(error)")
+            errorMessage = "Company selection failed: \(error.localizedDescription)"
         }
     }
 }

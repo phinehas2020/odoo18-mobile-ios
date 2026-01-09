@@ -1,8 +1,15 @@
 import Foundation
 
-enum APIError: Error {
+enum APIError: LocalizedError {
     case invalidResponse
     case httpStatus(Int)
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse: return "Invalid server response (not HTTP)"
+        case .httpStatus(let code): return "Server error (HTTP \(code))"
+        }
+    }
 }
 
 final class APIClient {
@@ -26,7 +33,10 @@ final class APIClient {
     }
 
     func send<T: Decodable>(_ endpoint: Endpoint, retryOnAuth: Bool = true) async throws -> T {
-        var request = URLRequest(url: endpoint.url(baseURL: baseURL))
+        let finalURL = endpoint.url(baseURL: baseURL)
+        print("API Request: \(endpoint.method) \(finalURL.absoluteString)")
+        
+        var request = URLRequest(url: finalURL)
         request.httpMethod = endpoint.method
         request.httpBody = endpoint.body
         if endpoint.body != nil {
@@ -35,8 +45,11 @@ final class APIClient {
         if let token = authStore.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        
         let (data, response) = try await session.data(for: request)
+        
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("API Error: Response is not HTTPURLResponse. Type: \(type(of: response)). URL: \(response.url?.absoluteString ?? "nil")")
             throw APIError.invalidResponse
         }
         if httpResponse.statusCode == 401, retryOnAuth {
@@ -116,6 +129,10 @@ final class APIClient {
     private func recordError(endpoint: String, response: HTTPURLResponse, data: Data) {
         let logURL = response.value(forHTTPHeaderField: "X-Rest-Log-Url")
         let message = String(data: data, encoding: .utf8)
-        errorStore?.record(endpoint: endpoint, logURL: logURL, message: message ?? "HTTP \\(response.statusCode)")
+        print("API Error [\(endpoint)] Status: \(response.statusCode)")
+        if let message {
+            print("API Error Body: \(message)")
+        }
+        errorStore?.record(endpoint: endpoint, logURL: logURL, message: message ?? "HTTP \(response.statusCode)")
     }
 }
