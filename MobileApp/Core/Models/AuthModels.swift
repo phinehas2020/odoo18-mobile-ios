@@ -53,3 +53,11 @@ struct RefreshRequest: Codable {
         case companyId = "company_id"
     }
 }
+
+struct WebSessionResponse: Codable {
+    let loginUrl: String
+
+    enum CodingKeys: String, CodingKey {
+        case loginUrl = "login_url"
+    }
+}

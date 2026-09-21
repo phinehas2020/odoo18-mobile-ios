@@ -1,9 +1,12 @@
 import Foundation
 import GRDB
 
+@MainActor
 final class SyncEngine: ObservableObject {
     @Published private(set) var lastSync: Date?
     @Published private(set) var pendingOutboxCount: Int = 0
+    @Published private(set) var failedOutboxCount: Int = 0
+    private var isRefreshing = false
 
     private var apiClient: APIClient?
     private let dbQueue: DatabaseQueue
@@ -26,6 +29,9 @@ final class SyncEngine: ObservableObject {
     }
 
     func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         await pullChanges()
         await pushOutbox()
         updatePendingCount()
@@ -76,6 +82,7 @@ final class SyncEngine: ObservableObject {
     }
 
     private func updatePendingCount() {
+        failedOutboxCount = (try? outboxStore.failedCount()) ?? failedOutboxCount
         pendingOutboxCount = (try? outboxStore.pendingCount()) ?? pendingOutboxCount
     }
 }

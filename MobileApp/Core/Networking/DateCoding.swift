@@ -7,7 +7,14 @@ enum DateCoding {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
-            let value = try container.decode(String.self)
+            let rawValue = try container.decode(String.self)
+            // Odoo datetime fields are UTC but its Python API can serialize them
+            // without a timezone. Do not interpret those values in the phone's zone.
+            let naivePattern = #"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?$"#
+            let isNaiveUTC = rawValue.range(of: naivePattern, options: .regularExpression) != nil
+            let value = isNaiveUTC
+                ? rawValue.replacingOccurrences(of: " ", with: "T") + "Z"
+                : rawValue
             if let date = formatter.date(from: value) {
                 return date
             }

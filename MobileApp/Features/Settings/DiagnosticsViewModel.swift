@@ -7,6 +7,7 @@ final class DiagnosticsViewModel: ObservableObject {
     @Published var cursor: Int = 0
     @Published var outboxCount: Int = 0
     @Published var lastError: ApiErrorEntry?
+    @Published var diagnosticReport = ""
 
     private let dbQueue: DatabaseQueue
 
@@ -28,6 +29,8 @@ final class DiagnosticsViewModel: ObservableObject {
             cursor = 0
             outboxCount = 0
         }
-        lastError = ApiErrorStore.shared.latest()
+        let store = ApiErrorStore(dbQueue: dbQueue)
+        lastError = store.latest()
+        diagnosticReport = store.diagnosticReport()
     }
 }

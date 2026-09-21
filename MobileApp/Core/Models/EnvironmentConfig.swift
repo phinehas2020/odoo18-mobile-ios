@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class EnvironmentConfig: ObservableObject {
     @Published var baseURL: URL? {
         didSet { save() }

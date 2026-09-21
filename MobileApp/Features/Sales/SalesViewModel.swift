@@ -4,8 +4,11 @@ import Foundation
 final class SalesViewModel: ObservableObject {
     @Published var orders: [SaleOrderItem] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
 
     func load(apiClient: APIClient) async {
+        guard !isLoading else { return }
+        errorMessage = nil
         isLoading = true
         defer { isLoading = false }
         do {
@@ -13,7 +16,7 @@ final class SalesViewModel: ObservableObject {
             let orders: [SaleOrderItem] = try await apiClient.send(endpoint)
             self.orders = orders
         } catch {
-            self.orders = []
+            errorMessage = "Couldn’t refresh. " + APIClient.failureMessage(error)
         }
     }
 }

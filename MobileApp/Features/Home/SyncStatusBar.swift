@@ -6,21 +6,23 @@ struct SyncStatusBar: View {
     let isOnline: Bool
 
     var body: some View {
-        HStack {
-            Image(systemName: isOnline ? "arrow.triangle.2.circlepath" : "wifi.slash")
-            Text(isOnline ? "Online" : "Offline")
-                .font(.caption)
-            Spacer()
-            Text("Pending: \(pending)")
-                .font(.caption)
-            if let lastSync {
-                Text(lastSync.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            Label(isOnline ? "Connected" : "You’re offline", systemImage: isOnline ? "wifi" : "wifi.slash")
+                .font(.subheadline.weight(.semibold))
+            if pending > 0 {
+                Text("\(pending) changes waiting to sync")
+                    .font(.subheadline)
+            }
+            if !isOnline {
+                Text("Reconnect to load the latest information.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            } else if let lastSync {
+                Text("Last synced \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .padding(8)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class AuthStore: ObservableObject {
     @Published private(set) var accessToken: String?
     @Published private(set) var refreshToken: String?

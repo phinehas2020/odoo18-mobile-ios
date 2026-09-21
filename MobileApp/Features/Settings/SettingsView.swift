@@ -32,14 +32,17 @@ struct SettingsView: View {
             Section(header: Text("Diagnostics")) {
                 Text("Last Sync: \(diagnostics.lastSync?.formatted() ?? "Never")")
                 Text("Cursor: \(diagnostics.cursor)")
+                if syncEngine.failedOutboxCount > 0 {
+                    Label("\(syncEngine.failedOutboxCount) saved operations need review. Open the affected transfers and verify quantities before entering them again.", systemImage: "exclamationmark.triangle")
+                }
                 Text("Outbox Pending: \(diagnostics.outboxCount)")
-                if let error = diagnostics.lastError {
-                    Text("Last Error: \(error.endpoint)")
-                    if let log = error.logURL {
-                        Text(log)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                if !diagnostics.diagnosticReport.isEmpty {
+                    Text(diagnostics.diagnosticReport)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                    ShareLink("Share diagnostic report", item: diagnostics.diagnosticReport)
+                } else {
+                    Text("No recorded request failures.").foregroundStyle(.secondary)
                 }
                 Button("Refresh Diagnostics") {
                     diagnostics.refresh()

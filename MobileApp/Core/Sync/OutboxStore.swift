@@ -31,7 +31,7 @@ final class OutboxStore {
         return try dbQueue.read { db in
             let rows = try Row.fetchAll(
                 db,
-                sql: "SELECT event_id, type, payload, created_at FROM outbox_actions WHERE status != 'success' ORDER BY created_at ASC"
+                sql: "SELECT event_id, type, payload, created_at FROM outbox_actions WHERE status = 'pending' ORDER BY created_at ASC"
             )
             return rows.compactMap { row in
                 guard let payloadString: String = row["payload"],
@@ -58,9 +58,15 @@ final class OutboxStore {
         }
     }
 
+    func failedCount() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox_actions WHERE status = 'failed'") ?? 0
+        }
+    }
+
     func pendingCount() throws -> Int {
         try dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox_actions WHERE status != 'success'") ?? 0
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox_actions WHERE status = 'pending'") ?? 0
         }
     }
 }

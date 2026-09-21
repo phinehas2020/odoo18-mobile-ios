@@ -9,6 +9,9 @@ struct DeepLinkParser {
             case "inventory":
                 if let id { return .picking(id: id) }
                 return .inventoryHome
+            case "manufacturing":
+                if let id { return .manufacturingOrder(id: id) }
+                return .manufacturingHome
             case "sales":
                 if let id { return .salesOrder(id: id) }
                 return .salesHome

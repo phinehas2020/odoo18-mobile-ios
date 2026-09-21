@@ -8,9 +8,10 @@ final class SyncEngineTests: XCTestCase {
         super.tearDown()
     }
 
+    @MainActor
     func testRefreshUpdatesCursorAndMarksOutbox() async throws {
         let dbQueue = try makeDatabase()
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: "INSERT INTO outbox_actions (event_id, type, payload, created_at, status) VALUES (?, ?, ?, ?, ?)",
                 arguments: ["event-1", "inventory.scan", "{}", Date(), "pending"]
@@ -58,10 +59,10 @@ final class SyncEngineTests: XCTestCase {
 
         await syncEngine.refresh()
 
-        let cursor = try dbQueue.read { db -> Int in
+        let cursor = try await dbQueue.read { db -> Int in
             try Int.fetchOne(db, sql: "SELECT cursor FROM sync_state WHERE id = 1") ?? 0
         }
-        let pendingCount = try dbQueue.read { db -> Int in
+        let pendingCount = try await dbQueue.read { db -> Int in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox_actions WHERE status != 'success'") ?? 0
         }
 
@@ -69,6 +70,41 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(pendingCount, 0)
         XCTAssertEqual(syncEngine.pendingOutboxCount, 0)
         XCTAssertNotNil(syncEngine.lastSync)
+    }
+
+    @MainActor
+    func testSalesRefreshPreservesOrdersOnFailureAndRecovers() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let client = APIClient(
+            baseURL: URL(string: "https://example.com")!,
+            authStore: AuthStore(),
+            session: URLSession(configuration: config),
+            errorStore: nil
+        )
+        let model = SalesViewModel()
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                           httpVersion: nil, headerFields: nil)!
+            let data = Data(#"[{"id":1,"name":"SO001","state":"sale","amount_total":10,"currency_id":1}]"#.utf8)
+            return (response, data)
+        }
+        await model.load(apiClient: client)
+        XCTAssertEqual(model.orders.map(\.id), [1])
+
+        MockURLProtocol.requestHandler = { _ in throw URLError(.notConnectedToInternet) }
+        await model.load(apiClient: client)
+        XCTAssertEqual(model.orders.map(\.id), [1])
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertFalse(model.isLoading)
+
+        MockURLProtocol.requestHandler = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 200,
+                             httpVersion: nil, headerFields: nil)!, Data("[]".utf8))
+        }
+        await model.load(apiClient: client)
+        XCTAssertTrue(model.orders.isEmpty)
+        XCTAssertNil(model.errorMessage)
     }
 
     private func makeDatabase() throws -> DatabaseQueue {

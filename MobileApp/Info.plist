@@ -21,7 +21,7 @@
     <key>UILaunchScreen</key>
     <dict />
     <key>NSCameraUsageDescription</key>
-    <string>Camera access is required to scan barcodes.</string>
+    <string>Use the camera to scan barcodes and capture required quality-check photos.</string>
     <key>NSUserNotificationUsageDescription</key>
     <string>Notifications keep you up to date on picking assignments.</string>
 </dict>

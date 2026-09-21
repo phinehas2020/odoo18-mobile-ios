@@ -31,4 +31,13 @@ final class OutboxStoreTests: XCTestCase {
         pending = try store.pendingActions()
         XCTAssertEqual(pending.count, 0)
     }
+    func testFailedActionsAreRetainedButNotAutomaticallyReplayed() throws {
+        let store = OutboxStore(dbQueue: try makeDatabase())
+        let action = try store.enqueue(type: "inventory.scan", payload: [:])
+        try store.mark(eventId: action.eventId, status: "failed")
+        XCTAssertTrue(try store.pendingActions().isEmpty)
+        XCTAssertEqual(try store.pendingCount(), 0)
+        XCTAssertEqual(try store.failedCount(), 1)
+    }
+
 }
