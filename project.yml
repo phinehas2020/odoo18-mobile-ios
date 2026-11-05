@@ -19,10 +19,10 @@ targets:
           - PrivacyInfo.xcprivacy
       - path: MobileApp/PrivacyInfo.xcprivacy
         buildPhase: resources
-    # entitlements:
-    #   path: MobileApp/MobileOdoo.entitlements
-    #   properties:
-    #     aps-environment: development
+    entitlements:
+      path: MobileApp/MobileOdoo.entitlements
+      properties:
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.phinehasadams.odoomobile.app

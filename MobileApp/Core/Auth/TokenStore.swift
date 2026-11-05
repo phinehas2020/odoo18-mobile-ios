@@ -11,6 +11,9 @@ final class TokenStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
+            // Readable when iOS wakes the app in the background (for example for a push
+            // notification) while the phone is locked; never restored onto another device.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)

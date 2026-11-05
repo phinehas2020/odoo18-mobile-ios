@@ -23,7 +23,7 @@ final class APIClient {
     private let encoder: JSONEncoder
     private let errorStore: ApiErrorStore?
 
-    private var refreshTask: Task<String, Error>?
+    private let refresher = TokenRefresher()
 
     init(baseURL: URL, authStore: AuthStore, session: URLSession = .shared, errorStore: ApiErrorStore? = ApiErrorStore.shared) {
         self.baseURL = baseURL
@@ -69,7 +69,7 @@ final class APIClient {
             print("\(context) response HTTP=\(http.statusCode) bytes=\(byteCount)")
             if http.statusCode == 401, retryOnAuth {
                 print("\(context) refreshing authentication; one retry allowed")
-                try await refreshAccessToken()
+                try await refreshAccessToken(rejectedAccessToken: token)
                 return try await execute(endpoint, retryOnAuth: false, decode: decode)
             }
             guard (200..<300).contains(http.statusCode) else {
@@ -140,45 +140,69 @@ final class APIClient {
         errorStore?.record(endpoint: endpoint, logURL: nil, message: diagnostic)
     }
 
-    private func refreshAccessToken() async throws {
-        if let refreshTask {
-            _ = try await refreshTask.value
-            return
-        }
-        let storedRefreshToken: String? = await MainActor.run { authStore.refreshToken }
-        guard let refreshToken = storedRefreshToken else {
-            await MainActor.run { authStore.clear() }
-            throw APIError.httpStatus(401)
-        }
-        let task = Task<String, Error> {
-            defer { self.refreshTask = nil }
-            let companyId: Int? = await MainActor.run { authStore.activeCompanyId ?? authStore.user?.companyId }
-            let payload = RefreshRequest(
-                refreshToken: refreshToken,
-                deviceId: deviceStore.deviceId,
-                companyId: companyId
-            )
-            let body = try encoder.encode(payload)
-            let endpoint = Endpoint(path: "/api/v1/auth/refresh", method: "POST", body: body)
-            let response: AuthTokensResponse = try await send(endpoint, retryOnAuth: false)
-            await MainActor.run {
-                authStore.setSession(
-                    accessToken: response.accessToken,
-                    refreshToken: response.refreshToken,
-                    user: response.user,
-                    companies: response.companies,
-                    activeCompanyId: response.user.companyId
-                )
+    /// Gets a fresh access token after `rejectedAccessToken` got a 401.
+    ///
+    /// The server rotates the refresh token on every use. If two requests refresh at the
+    /// same time with the same token, the phone keeps one new token while the server keeps
+    /// the other, and the next refresh fails. Employees then had to sign in again whenever the
+    /// app reopened after 15 minutes and several screens loaded at once. So exactly one
+    /// refresh runs at a time, and a request whose token was already replaced just retries.
+    private func refreshAccessToken(rejectedAccessToken: String?) async throws {
+        try await refresher.refresh { [self] in
+            let (currentAccess, refreshToken, companyId) = await MainActor.run {
+                (authStore.accessToken, authStore.refreshToken, authStore.activeCompanyId ?? authStore.user?.companyId)
             }
-            return response.accessToken
-        }
-        refreshTask = task
-        do {
-            _ = try await task.value
-        } catch {
-            await MainActor.run { authStore.clear() }
-            throw error
+            // Another request already refreshed after this one was sent: just retry.
+            if let currentAccess, currentAccess != rejectedAccessToken { return }
+            guard let refreshToken else {
+                await MainActor.run { authStore.clear() }
+                throw APIError.httpStatus(401)
+            }
+            let payload = RefreshRequest(refreshToken: refreshToken, deviceId: deviceStore.deviceId, companyId: companyId)
+            let endpoint = Endpoint(path: "/api/v1/auth/refresh", method: "POST", body: try encoder.encode(payload))
+            do {
+                let response: AuthTokensResponse = try await send(endpoint, retryOnAuth: false)
+                await MainActor.run {
+                    authStore.setSession(
+                        accessToken: response.accessToken,
+                        refreshToken: response.refreshToken,
+                        user: response.user,
+                        companies: response.companies,
+                        activeCompanyId: response.user.companyId
+                    )
+                }
+            } catch {
+                // Sign out only when the server says this refresh token is no longer valid.
+                // A dropped connection, timeout or server error keeps the session for next time.
+                if Self.isSessionRejection(error) {
+                    await MainActor.run {
+                        if authStore.refreshToken == refreshToken { authStore.clear() }
+                    }
+                }
+                throw error
+            }
         }
     }
 
+    static func isSessionRejection(_ error: Error) -> Bool {
+        switch error {
+        case APIError.httpStatus(let code), APIError.rejected(let code, _): return [400, 401, 403].contains(code)
+        default: return false
+        }
+    }
+
+}
+
+/// Runs one token refresh at a time. Callers that arrive while a refresh is running
+/// wait for that refresh instead of starting their own.
+actor TokenRefresher {
+    private var inFlight: Task<Void, Error>?
+
+    func refresh(_ work: @escaping () async throws -> Void) async throws {
+        if let inFlight { return try await inFlight.value }
+        let task = Task { try await work() }
+        inFlight = task
+        defer { inFlight = nil }
+        try await task.value
+    }
 }

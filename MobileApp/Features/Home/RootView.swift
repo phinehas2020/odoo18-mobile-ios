@@ -27,6 +27,10 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .apnsTokenUpdated)) { _ in
             registerDeviceIfPossible()
         }
+        .task(id: authStore.user?.id) {
+            guard authStore.user != nil else { return }
+            await NotificationPermission.requestAfterSignIn()
+        }
     }
 
     private func registerDeviceIfPossible() {

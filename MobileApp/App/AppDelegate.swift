@@ -8,8 +8,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        // Ask only when someone chooses assignment alerts in Settings.
-        // Previously authorized devices still register their existing token.
+        // People are asked once after signing in (NotificationPermission). On launch,
+        // authorized devices re-register so the server always has the current token.
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             if settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral {
                 DispatchQueue.main.async { application.registerForRemoteNotifications() }
@@ -35,6 +35,32 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         NotificationCenter.default.post(name: .deepLinkReceived, object: userInfo)
     }
 
+    /// Show assignments and announcements as banners even while the app is open.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+}
+
+/// Asks for notification permission once, right after someone signs in, so employees
+/// receive assignments and announcements without hunting for the setting.
+enum NotificationPermission {
+    @MainActor
+    static func requestAfterSignIn(center: UNUserNotificationCenter = .current()) async {
+        let status = await center.notificationSettings().authorizationStatus
+        switch status {
+        case .notDetermined:
+            let allowed = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
+            if allowed { UIApplication.shared.registerForRemoteNotifications() }
+        case .authorized, .provisional, .ephemeral:
+            UIApplication.shared.registerForRemoteNotifications()
+        default:
+            break   // They said no; Settings explains how to turn it back on.
+        }
+    }
 }
 
 extension Notification.Name {
