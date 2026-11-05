@@ -30,47 +30,105 @@ struct TransferReturnSheet: View {
     @State private var busy = false
     @State private var attempted = false
     @State private var errorMessage: String?
+    @State private var confirmDiscard = false
+    @FocusState private var focusedLine: Int?
+    private var hasUnsavedChanges: Bool {
+        result == nil && !attempted && (confirmed || quantities.values.contains { !$0.isEmpty })
+    }
     var body: some View {
         NavigationStack {
             Form {
                 if let result {
                     Section {
-                        Label("Return transfer created", systemImage: "checkmark.circle.fill").font(.headline)
-                        Text(result.new_picking_name)
-                        NavigationLink("Open return and process goods") { InventoryDetailView(pickingId: result.new_picking_id) }
-                        Text("The return still needs to be physically processed and completed.").foregroundStyle(.secondary)
+                        WorkplaceHeader(title: "Return transfer created", subtitle: result.new_picking_name, symbol: "checkmark.circle.fill")
+                    }
+                    Section {
+                        NavigationLink { InventoryDetailView(pickingId: result.new_picking_id) } label: {
+                            WorkplaceActionLabel(title: "Open return and process goods", subtitle: "Record the products received back into stock.", symbol: "arrow.uturn.backward", emphasized: true)
+                        }
+                        Text("The return still needs to be physically processed and completed.")
+                            .font(.subheadline).foregroundStyle(.secondary)
                     }
                 } else if let review {
                     Section {
-                        Text(review.picking_name).font(.headline)
-                        Text("Enter only the quantities being returned. Leave other products at zero.").foregroundStyle(.secondary)
+                        Text(review.picking_name).font(.headline).accessibilityAddTraits(.isHeader)
+                        Text("Leave products you’re keeping at zero.")
+                            .font(.subheadline).foregroundStyle(.secondary)
                     }
                     Section("Return quantities") {
                         ForEach(review.lines) { line in
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(line.product_name).font(.headline)
-                                Text("Up to \(line.quantity.formatted()) \(line.uom_name ?? "")").foregroundStyle(.secondary)
+                                Text("Up to \(line.quantity.formatted()) \(line.uom_name ?? "")")
+                                    .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                                 TextField("Quantity to return", text: Binding(get: { quantities[line.id] ?? "" }, set: { quantities[line.id] = $0 }))
                                     .keyboardType(.decimalPad)
-                            }.padding(.vertical, 6)
+                                    .font(.title2.weight(.semibold)).monospacedDigit().frame(minHeight: 44)
+                                    .focused($focusedLine, equals: line.id)
+                                    .accessibilityLabel("Quantity to return for \(line.product_name)")
+                                    .accessibilityValue("\(quantities[line.id] ?? "0") \(line.uom_name ?? "")")
+                                    .accessibilityHint("Maximum \(line.quantity.formatted()) \(line.uom_name ?? "")")
+                            }.padding(.vertical, 8)
                         }
                     }
                     Section {
-                        Toggle("I verified the return quantities", isOn: $confirmed)
-                        Button("Create return transfer") { Task { await create() } }
-                            .buttonStyle(.borderedProminent).frame(minHeight: 52)
+                        Toggle("I verified the return quantities", isOn: $confirmed).frame(minHeight: 44)
+                            .accessibilityLabel("I verified return quantities for \(review.picking_name)")
+                        Button { focusedLine = nil; Task { await create() } } label: {
+                            Label("Create return", systemImage: "arrow.uturn.backward")
+                                .fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 28)
+                        }
+                            .buttonStyle(.borderedProminent).tint(WorkplaceTheme.buttonFill)
+                            .controlSize(.large)
                             .disabled(!confirmed || selectedLines == nil || attempted)
+                            .accessibilityLabel("Create return for \(review.picking_name)")
                     }
                 }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-                if busy { ProgressView("Checking return…") }
+                if let errorMessage {
+                    Section {
+                        WorkplaceNotice(title: "Return needs attention", message: errorMessage,
+                            symbol: "exclamationmark.circle", tint: WorkplaceTheme.danger)
+                        if review == nil && !attempted {
+                            Button("Try again") { self.errorMessage = nil; Task { await load() } }.frame(minHeight: 44)
+                        }
+                    }
+                }
+                if busy { ProgressView("Checking return…").frame(maxWidth: .infinity, minHeight: 60) }
             }
             .disabled(busy)
+            .scrollDismissesKeyboard(.interactively)
+            .workplaceScreen()
             .navigationTitle("Return goods")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(busy) } }
-            .interactiveDismissDisabled(busy)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(result != nil || attempted ? "Close" : "Cancel") { cancel() }.disabled(busy)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    if let nextLine = nextLine {
+                        Button("Next") { focusedLine = nextLine }
+                    }
+                    Spacer()
+                    Button("Done") { focusedLine = nil }
+                }
+            }
+            .confirmationDialog("Discard return draft?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Discard changes", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
+            } message: { Text("The return quantities haven’t been submitted.") }
+            .interactiveDismissDisabled(busy || hasUnsavedChanges)
             .task { await load() }
         }
+    }
+    private var nextLine: Int? {
+        guard let review, let focusedLine,
+              let index = review.lines.firstIndex(where: { $0.id == focusedLine }),
+              index + 1 < review.lines.count else { return nil }
+        return review.lines[index + 1].id
+    }
+    private func cancel() {
+        focusedLine = nil
+        if hasUnsavedChanges { confirmDiscard = true } else { dismiss() }
     }
     private var selectedLines: [[String: Any]]? {
         guard let review else { return nil }

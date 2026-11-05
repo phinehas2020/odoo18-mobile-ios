@@ -2,30 +2,35 @@ import SwiftUI
 
 struct WorkStatusBadge: View {
     let state: String
-    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        Label(warehouseStateLabel(state), systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(color.opacity(contrast == .increased ? 0.24 : 0.12), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4).padding(.vertical, 6)
-            }
-            .accessibilityLabel("Status: \(warehouseStateLabel(state))")
+        Label(title, systemImage: symbol)
+            .labelStyle(.titleAndIcon)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Status")
+            .accessibilityValue(title)
+    }
+
+    private var title: String {
+        switch state {
+        case "pass", "passed": return "Passed"
+        case "fail", "failed": return "Failed"
+        case "none": return "Not checked"
+        default: return warehouseStateLabel(state)
+        }
     }
 
     private var color: Color {
         switch state {
-        case "ready", "assigned": return .teal
-        case "progress": return .blue
-        case "pending", "waiting": return .orange
-        case "to_close": return .purple
-        case "done": return .green
-        case "blocked": return .red
-        case "confirmed": return .indigo
-        default: return .gray
+        case "ready", "assigned", "confirmed", "to_close": return WorkplaceTheme.accent
+        case "progress": return WorkplaceTheme.information
+        case "pending", "waiting", "none": return WorkplaceTheme.attention
+        case "done", "pass", "passed": return WorkplaceTheme.success
+        case "blocked", "fail", "failed": return WorkplaceTheme.danger
+        default: return .secondary
         }
     }
     private var symbol: String {
@@ -34,8 +39,9 @@ struct WorkStatusBadge: View {
         case "progress": return "gearshape.2.fill"
         case "pending", "waiting": return "clock.fill"
         case "to_close": return "checkmark.seal"
-        case "done": return "checkmark.circle.fill"
-        case "blocked": return "exclamationmark.octagon.fill"
+        case "done", "pass", "passed": return "checkmark.circle.fill"
+        case "blocked", "fail", "failed": return "exclamationmark.octagon.fill"
+        case "none": return "checkmark.shield"
         case "cancel": return "xmark.circle"
         case "confirmed": return "clipboard.fill"
         default: return "doc.text"
@@ -52,7 +58,7 @@ struct WorkDetailRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).foregroundStyle(.secondary)
                 Text(value).fontWeight(.medium)
-            }.accessibilityElement(children: .combine)
+            }.padding(.vertical, 2).accessibilityElement(children: .combine)
         } else {
             LabeledContent(title) { Text(value).foregroundStyle(.primary).multilineTextAlignment(.trailing) }
         }
@@ -61,8 +67,8 @@ struct WorkDetailRow: View {
 
 #Preview("Status language") {
     List {
-        ForEach(["draft", "confirmed", "ready", "progress", "waiting", "pending", "to_close", "done", "cancel"], id: \.self) { state in
+        ForEach(["draft", "confirmed", "ready", "progress", "waiting", "pending", "to_close", "done", "cancel", "passed", "failed"], id: \.self) { state in
             WorkStatusBadge(state: state)
         }
-    }
+    }.workplaceScreen()
 }

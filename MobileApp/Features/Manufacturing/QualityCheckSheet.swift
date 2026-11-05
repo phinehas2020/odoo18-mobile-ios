@@ -14,65 +14,120 @@ struct QualityCheckSheet: View {
     @State private var photoData: Data?
     @State private var showCamera = false
     @State private var confirmFailure = false
+    @State private var showDiscardConfirmation = false
+    @FocusState private var notesFocused: Bool
     private var supported: Bool { ["instructions", "passfail", "picture"].contains(check.controlType ?? "") }
     private var needsPhoto: Bool { check.controlType == "picture" }
     private var instructionsOnly: Bool { check.controlType == "instructions" }
+    private var hasUnsavedChanges: Bool { !submitted && (!notes.isEmpty || photoData != nil) }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text(check.name).font(.title2.bold())
-                    if let instructions = check.instructions, !instructions.isEmpty {
-                        Text(instructions).textSelection(.enabled)
+                    WorkplaceHeader(title: check.name,
+                                    subtitle: instructionsOnly ? "Read the instructions, then confirm the check is complete." : needsPhoto ? "Inspect the product and attach a photo of the result." : "Inspect the product and record the actual result.",
+                                    symbol: "checkmark.shield")
+                    if check.failureAction == "block" {
+                        Label("A failed check blocks production completion.", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let instructions = check.instructions, !instructions.isEmpty {
+                    Section("Inspection Instructions") {
+                        QualityInstructionsView(source: instructions)
                     }
                 }
                 if needsPhoto {
-                    Section("Required photo") {
+                    Section("Required Photo") {
                         if let photoData, let image = UIImage(data: photoData) {
-                            Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 220).accessibilityLabel("Selected inspection photo")
+                            Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 220)
+                                .clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityLabel("Selected inspection photo")
+                            WorkplaceStatusPill(text: "Photo attached", symbol: "checkmark.circle.fill", tint: WorkplaceTheme.success)
                         }
                         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                            Button { showCamera = true } label: { Label("Take photo", systemImage: "camera").frame(minHeight: 48) }
+                            Button { showCamera = true } label: {
+                                WorkplaceActionLabel(title: "Take photo", subtitle: "Capture this inspection", symbol: "camera")
+                            }.accessibilityLabel("Take inspection photo for \(check.name)")
                         }
                         PhotosPicker(selection: $photoItem, matching: .images) {
-                            Label("Choose photo", systemImage: "photo").frame(minHeight: 48)
-                        }
+                            WorkplaceActionLabel(title: "Choose photo", subtitle: "Use an existing inspection photo", symbol: "photo")
+                        }.accessibilityLabel("Choose inspection photo for \(check.name)")
                     }
                 }
-                Section("Inspection notes") {
+                Section("Inspection Notes") {
                     TextField("What did you check?", text: $notes, axis: .vertical).lineLimit(3...8)
+                        .padding(.vertical, 6).focused($notesFocused)
+                        .accessibilityLabel("Inspection notes for \(check.name)")
                     Text("Record the actual inspection result. This updates Odoo.").font(.footnote).foregroundStyle(.secondary)
                 }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-                if !supported {
-                    Text("This check requires a control that is not available here. Complete it in Odoo.").foregroundStyle(.secondary)
+                if let errorMessage {
+                    WorkplaceNotice(title: "Inspection needs attention", message: errorMessage, symbol: "exclamationmark.triangle", tint: WorkplaceTheme.danger)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)).listRowBackground(Color.clear)
                 }
-                Section {
+                if !supported {
+                    WorkplaceNotice(title: "Complete this check in Odoo", message: "This check requires a control that is not available here. Complete it in Odoo.", symbol: "arrow.up.right.square")
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)).listRowBackground(Color.clear)
+                }
+                Section("Record Inspection") {
                     Button { submit(true) } label: {
-                        Label(instructionsOnly ? "Confirm instructions completed" : needsPhoto ? "Save photo and pass" : "Pass check", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: 52)
-                    }.buttonStyle(.borderedProminent)
-                        .disabled(needsPhoto && photoData == nil)
+                        Label(instructionsOnly ? "Confirm complete" : needsPhoto ? "Save and pass" : "Pass check", systemImage: "checkmark.circle.fill")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent).tint(WorkplaceTheme.buttonFill)
+                    .controlSize(.large)
+                    .accessibilityLabel(instructionsOnly ? "Confirm \(check.name) is complete" : needsPhoto ? "Save photo and pass \(check.name)" : "Pass \(check.name)")
+                    .disabled(needsPhoto && photoData == nil)
                     if check.controlType == "passfail" || check.controlType == nil {
                         Button { confirmFailure = true } label: {
-                            Label("Fail check", systemImage: "xmark.octagon").frame(maxWidth: .infinity, minHeight: 52)
-                        }.buttonStyle(.bordered)
+                            Label("Fail check", systemImage: "xmark.octagon")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .tint(WorkplaceTheme.danger)
+                        .accessibilityLabel("Record a failed inspection for \(check.name)")
                     }
                 }
                 .disabled(!supported)
-                if busy { ProgressView("Saving inspection…") }
+                if busy { ProgressView("Saving inspection…").frame(maxWidth: .infinity).padding(.vertical, 12) }
             }
+            .workplaceScreen()
             .disabled(busy || submitted)
-            .navigationTitle("Quality check")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(busy) } }
-            .interactiveDismissDisabled(busy)
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Quality Check")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if submitted {
+                        if #available(iOS 26, *) {
+                            Button(role: .close) { dismiss() }.disabled(busy)
+                        } else {
+                            Button { dismiss() } label: { Label("Close", systemImage: "xmark") }
+                                .labelStyle(.iconOnly).disabled(busy)
+                        }
+                    } else {
+                        Button("Cancel", role: .cancel) { requestDismiss() }.disabled(busy)
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { notesFocused = false }
+                }
+            }
+            .interactiveDismissDisabled(busy || hasUnsavedChanges)
+            .confirmationDialog("Discard Inspection Draft?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) { }
+            } message: {
+                Text("The inspection notes and photo you added will be lost.")
+            }
             .confirmationDialog("Record a failed inspection?", isPresented: $confirmFailure, titleVisibility: .visible) {
                 Button("Record failure", role: .destructive) { submit(false) }
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text(check.failureAction == "block" ? "This failure blocks production completion until the check is resolved." : "This records a failed quality check in Odoo.")
             }
-            .sheet(isPresented: $showCamera) {
+            .fullScreenCover(isPresented: $showCamera) {
                 InspectionCamera { image in
                     photoData = inspectionJPEG(image)
                     showCamera = false
@@ -88,8 +143,14 @@ struct QualityCheckSheet: View {
             }
         }
     }
+    private func requestDismiss() {
+        notesFocused = false
+        if hasUnsavedChanges { showDiscardConfirmation = true }
+        else { dismiss() }
+    }
     private func submit(_ passed: Bool) {
         guard !busy, !submitted, notes.count <= 2000, !needsPhoto || photoData != nil else { return }
+        notesFocused = false
         busy = true; submitted = true
         Task {
             let success = await save(passed, notes, photoData)

@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.odoo.mobile
 settings:
   base:
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: W37R3678NP
 packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
@@ -14,7 +14,11 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - MobileApp
+      - path: MobileApp
+        excludes:
+          - PrivacyInfo.xcprivacy
+      - path: MobileApp/PrivacyInfo.xcprivacy
+        buildPhase: resources
     # entitlements:
     #   path: MobileApp/MobileOdoo.entitlements
     #   properties:
@@ -23,6 +27,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.phinehasadams.odoomobile.app
         INFOPLIST_FILE: MobileApp/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: NO
     dependencies:
       - package: GRDB
   MobileOdooTests:
@@ -31,6 +38,9 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - MobileAppTests
+    settings:
+      base:
+        SKIP_INSTALL: YES
     dependencies:
       - target: MobileOdoo
   MobileOdooUITests:
@@ -39,5 +49,32 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - MobileOdooUITests
+    settings:
+      base:
+        SKIP_INSTALL: YES
     dependencies:
       - target: MobileOdoo
+schemes:
+  MobileOdoo:
+    build:
+      targets:
+        MobileOdoo: all
+        MobileOdooTests: [test]
+        MobileOdooUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - name: MobileOdooTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: MobileOdooUITests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

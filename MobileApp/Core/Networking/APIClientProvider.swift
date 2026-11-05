@@ -13,7 +13,9 @@ final class APIClientProvider: ObservableObject {
 
     init(config: EnvironmentConfig, authStore: AuthStore) {
         config.$baseURL
-            .receive(on: DispatchQueue.main)
+            // Config is main-actor isolated. Deliver its initial value immediately
+            // so the first screen never starts before its connection exists.
+            .removeDuplicates()
             .sink { [weak self] url in
                 guard let url else {
                     self?.client = nil

@@ -9,9 +9,10 @@ final class EnvironmentConfig: ObservableObject {
         didSet { save() }
     }
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         if let urlString = defaults.string(forKey: "server_url"),
            let url = URL(string: urlString) {
             baseURL = url

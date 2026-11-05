@@ -5,6 +5,7 @@ struct Endpoint {
     let method: String
     var queryItems: [URLQueryItem] = []
     var body: Data? = nil
+    var headers: [String: String] = [:]
 
     func url(baseURL: URL) -> URL {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)

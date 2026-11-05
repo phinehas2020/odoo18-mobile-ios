@@ -55,6 +55,7 @@ final class APIClient {
         request.httpBody = endpoint.body
         request.setValue(requestID, forHTTPHeaderField: "X-Mobile-Request-ID")
         if endpoint.body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        for (field, value) in endpoint.headers { request.setValue(value, forHTTPHeaderField: field) }
         let token = await MainActor.run { authStore.accessToken }
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let context = "[mobile-api] id=\(requestID) \(endpoint.method) \(endpoint.path)"
@@ -72,6 +73,12 @@ final class APIClient {
                 return try await execute(endpoint, retryOnAuth: false, decode: decode)
             }
             guard (200..<300).contains(http.statusCode) else {
+                if endpoint.path.hasPrefix("/api/v1/shopify/packing"),
+                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let detail = object["detail"] as? [String: Any],
+                   let message = detail["message"] as? String, !message.isEmpty {
+                    throw APIError.rejected(http.statusCode, String(message.prefix(1000)))
+                }
                 if [400, 403, 422].contains(http.statusCode),
                    let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let message = object["detail"] as? String, !message.isEmpty {

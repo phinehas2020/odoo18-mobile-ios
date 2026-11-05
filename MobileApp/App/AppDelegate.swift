@@ -8,8 +8,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        requestNotificationPermissions()
-        application.registerForRemoteNotifications()
+        // Ask only when someone chooses assignment alerts in Settings.
+        // Previously authorized devices still register their existing token.
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            if settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral {
+                DispatchQueue.main.async { application.registerForRemoteNotifications() }
+            }
+        }
         return true
     }
 
@@ -30,9 +35,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         NotificationCenter.default.post(name: .deepLinkReceived, object: userInfo)
     }
 
-    private func requestNotificationPermissions() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
-    }
 }
 
 extension Notification.Name {

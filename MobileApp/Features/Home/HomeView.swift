@@ -1,178 +1,192 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var apiProvider: APIClientProvider
     @EnvironmentObject private var syncEngine: SyncEngine
     @EnvironmentObject private var networkMonitor: NetworkMonitor
-
     @StateObject private var viewModel = MenuViewModel()
-    @State private var searchText = ""
-    @State private var path = NavigationPath()
+    @State private var tab = "work"
+    @State private var workPath = NavigationPath()
+    @State private var warehousePath = NavigationPath()
+    @State private var morePath = NavigationPath()
+    @State private var search = ""
     @State private var selectedWebModule: MenuItem?
 
+    init(initialTab: String = "work") { _tab = State(initialValue: initialTab) }
+
+    private var hasInventory: Bool { viewModel.items.contains { $0.key == "inventory" } }
+    private var hasManufacturing: Bool { viewModel.items.contains { $0.key == "manufacturing" } }
+    private var hasPacking: Bool { viewModel.items.contains { $0.key == "packing" && $0.native } }
+
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    SyncStatusBar(
-                        lastSync: syncEngine.lastSync,
-                        pending: syncEngine.pendingOutboxCount,
-                        isOnline: networkMonitor.isOnline
-                    )
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What would you like to do?").font(.title2.bold())
-                        Text("Choose an app to get started.").foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if viewModel.isLoading && viewModel.items.isEmpty {
-                        ProgressView("Loading your apps…").padding(24)
-                    }
-                    if let message = viewModel.errorMessage {
-                        LoadFailureView(message: message) { Task { await reload() } }
-                    }
-                    if !viewModel.isLoading && viewModel.errorMessage == nil && viewModel.items.isEmpty {
-                        ContentUnavailableView("No apps available", systemImage: "square.grid.2x2", description: Text("Ask your Odoo administrator to enable your apps."))
-                    }
-                    if !searchText.isEmpty && !viewModel.items.isEmpty && !viewModel.items.contains(where: { $0.label.localizedCaseInsensitiveContains(searchText) }) && !(viewModel.items.contains(where: { $0.key == "inventory" }) && "Receive goods Receipts Deliveries Ship goods Internal transfers Move stock Stock on hand Count Scrap Completed transfers Returns History".localizedCaseInsensitiveContains(searchText)) && !(viewModel.items.contains(where: { $0.key == "manufacturing" }) && "Work orders".localizedCaseInsensitiveContains(searchText)) {
-                        ContentUnavailableView.search(text: searchText)
-                    }
-                    if viewModel.items.contains(where: { $0.key == "inventory" }) && (searchText.isEmpty || "Receive goods Receipts".localizedCaseInsensitiveContains(searchText)) {
-                        NavigationLink { InventoryView(receiptsOnly: true) } label: {
-                            WarehouseTaskCard(title: "Receive goods", subtitle: "Open receipts from suppliers", symbol: "tray.and.arrow.down")
-                        }.buttonStyle(.plain)
-                    }
-                    if viewModel.items.contains(where: { $0.key == "inventory" }) {
-                        if searchText.isEmpty || "Stock on hand Count Scrap".localizedCaseInsensitiveContains(searchText) {
-                            NavigationLink { StockOperationsView() } label: {
-                                WarehouseTaskCard(title: "Stock on hand", subtitle: "Find stock, count quantities and record scrap", symbol: "square.stack.3d.up")
-                            }.buttonStyle(.plain)
-                        }
-                        if searchText.isEmpty || "Completed transfers Returns History".localizedCaseInsensitiveContains(searchText) {
-                            NavigationLink { InventoryView(scope: .history) } label: {
-                                WarehouseTaskCard(title: "Completed transfers", subtitle: "Review history and return goods", symbol: "clock.arrow.circlepath")
-                            }.buttonStyle(.plain)
-                        }
-                        if searchText.isEmpty || "Deliveries Ship goods".localizedCaseInsensitiveContains(searchText) {
-                            NavigationLink { InventoryView(scope: .deliveries) } label: {
-                                WarehouseTaskCard(title: "Ship goods", subtitle: "Pick, pack and complete deliveries", symbol: "shippingbox")
-                            }.buttonStyle(.plain)
-                        }
-                        if searchText.isEmpty || "Internal transfers Move stock".localizedCaseInsensitiveContains(searchText) {
-                            NavigationLink { InventoryView(scope: .internalTransfers) } label: {
-                                WarehouseTaskCard(title: "Move stock", subtitle: "Internal warehouse transfers", symbol: "arrow.left.arrow.right")
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                    if viewModel.items.contains(where: { $0.key == "manufacturing" }) && (searchText.isEmpty || "Work orders".localizedCaseInsensitiveContains(searchText)) {
-                        NavigationLink { ManufacturingView(workOrdersFirst: true) } label: {
-                            WarehouseTaskCard(title: "Work orders", subtitle: "Start, pause and finish operations", symbol: "wrench.and.screwdriver")
-                        }.buttonStyle(.plain)
-                    }
-                    ForEach(viewModel.items.filter { searchText.isEmpty || $0.label.localizedCaseInsensitiveContains(searchText) }) { item in
-                        if item.native && ["inventory", "sales", "settings", "manufacturing"].contains(item.key) {
-                            NavigationLink(value: item.key) {
-                                ModuleTile(item: item)
-                            }
-                            .buttonStyle(.plain)
-                        } else if item.webURL != nil {
-                            Button {
-                                selectedWebModule = item
-                            } label: {
-                                ModuleTile(item: item)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding()
+        workspaceTabs
+        .tint(WorkplaceTheme.accent)
+        .task(id: apiProvider.client.map { ObjectIdentifier($0) }) {
+            await reload()
+            await syncEngine.refresh()
+        }
+        .onChange(of: networkMonitor.isOnline) { _, online in
+            if online { Task { await syncEngine.refresh() } }
+        }
+        .onChange(of: appState.deepLink) { _, link in
+            guard let link else { return }
+            switch link {
+            case .inventoryHome: tab = "warehouse"; warehousePath.append("inventory")
+            case .picking: tab = "warehouse"; warehousePath.append(link)
+            case .packingHome: tab = "warehouse"; warehousePath.append("packing")
+            case .packingShipment: tab = "warehouse"; warehousePath.append(link)
+            case .manufacturingHome: tab = "work"; workPath = NavigationPath()
+            case .manufacturingOrder: tab = "work"; workPath.append(link)
+            case .salesHome: tab = "more"; morePath.append("sales")
+            case .salesOrder: tab = "more"; morePath.append(link)
+            case .settings: tab = "more"; morePath.append("settings")
             }
-            .navigationTitle("Home")
-            .searchable(text: $searchText, prompt: "Find an app")
-            .refreshable { await reload() }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: "settings") { Label("Settings", systemImage: "gearshape") }
-                }
-            }
-            .task {
-                if let client = apiProvider.client {
-                    await viewModel.load(apiClient: client)
-                    await syncEngine.refresh()
-                }
-            }
-            .onChange(of: networkMonitor.isOnline) { isOnline in
-                guard isOnline, apiProvider.client != nil else { return }
-                Task { await syncEngine.refresh() }
-            }
-            .navigationDestination(for: String.self) { key in
-                switch key {
-                case "inventory":
-                    InventoryView()
-                case "manufacturing":
-                    ManufacturingView()
-                case "sales":
-                    SalesView()
-                case "settings":
-                    SettingsView()
-                default:
-                    Text("Not available")
-                }
-            }
-            .onChange(of: appState.deepLink) { link in
-                guard let link else { return }
-                switch link {
-                case .inventoryHome:
-                    path.append("inventory")
-                case .manufacturingHome:
-                    path.append("manufacturing")
-                case .manufacturingOrder(let id):
-                    path.append("manufacturing")
-                    path.append(DeepLink.manufacturingOrder(id: id))
-                case .salesHome:
-                    path.append("sales")
-                case .settings:
-                    path.append("settings")
-                case .picking(let id):
-                    path.append("inventory")
-                    path.append(DeepLink.picking(id: id))
-                case .salesOrder(let id):
-                    path.append("sales")
-                    path.append(DeepLink.salesOrder(id: id))
-                }
-                appState.deepLink = nil
-            }
-            .navigationDestination(for: DeepLink.self) { link in
-                switch link {
-                case .picking(let id):
-                    InventoryDetailView(pickingId: id)
-                case .manufacturingOrder(let id):
-                    ManufacturingDetailView(orderId: id)
-                case .salesOrder(let id):
-                    SalesOrderDetailView(orderId: id)
-                default:
-                    EmptyView()
-                }
-            }
-            .sheet(item: $selectedWebModule) { item in
-                if let urlString = item.webURL {
-                    NavigationStack {
-                        OdooWebView(title: item.label, targetURL: urlString)
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("Done") {
-                                        selectedWebModule = nil
-                                    }
-                                }
-                            }
-                    }
+            appState.deepLink = nil
+        }
+        .sheet(item: $selectedWebModule) { item in
+            if let url = item.webURL {
+                NavigationStack {
+                    OdooWebView(title: item.label, targetURL: url)
+                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { selectedWebModule = nil } } }
                 }
             }
         }
     }
+    @ViewBuilder
+    private var workspaceTabs: some View {
+        if #available(iOS 18, *) {
+            TabView(selection: $tab) {
+                Tab("Work", systemImage: "checklist", value: "work") { workWorkspace }
+                Tab("Warehouse", systemImage: "shippingbox", value: "warehouse") { warehouseWorkspace }
+                Tab("More", systemImage: "ellipsis.circle", value: "more") { moreWorkspace }
+            }
+        } else {
+            TabView(selection: $tab) {
+                workWorkspace.tabItem { Label("Work", systemImage: "checklist") }.tag("work")
+                warehouseWorkspace.tabItem { Label("Warehouse", systemImage: "shippingbox") }.tag("warehouse")
+                moreWorkspace.tabItem { Label("More", systemImage: "ellipsis.circle") }.tag("more")
+            }
+        }
+    }
+
+    private var workWorkspace: some View {
+        NavigationStack(path: $workPath) {
+            Group {
+                if hasManufacturing && authStore.user?.isAdmin == true { AdminWorkOverview() }
+                else if hasManufacturing { ManufacturingView(workOrdersFirst: true) }
+                else if hasInventory { InventoryView() }
+                else if viewModel.isLoading { ProgressView("Loading your work…") }
+                else if let message = viewModel.errorMessage { LoadFailureView(message: message) { Task { await reload() } } }
+                else { ContentUnavailableView("No assigned workspace", systemImage: "checklist", description: Text("Your available apps are in More.")) }
+            }
+            .navigationDestination(for: String.self) { destination($0) }
+            .navigationDestination(for: DeepLink.self) { deepDestination($0) }
+        }
+    }
+
+    private var warehouseWorkspace: some View {
+        NavigationStack(path: $warehousePath) {
+            List {
+                if hasPacking {
+                    Section("Shipping") {
+                        taskLink("Pack orders", subtitle: "Scan a shipping label", symbol: "barcode.viewfinder", key: "packing")
+                    }
+                }
+                if hasInventory {
+                    Section("Stock movement") {
+                        taskLink("Receipts", subtitle: "Receive incoming goods", symbol: "tray.and.arrow.down", key: "receipts")
+                        taskLink("Deliveries", subtitle: "Pick and ship orders", symbol: "shippingbox", key: "deliveries")
+                        taskLink("Internal transfers", subtitle: "Move between locations", symbol: "arrow.left.arrow.right", key: "internal")
+                    }
+                    Section("Stock records") {
+                        taskLink("On hand", subtitle: "Availability, counts and scrap", symbol: "square.stack.3d.up", key: "stock")
+                        taskLink("History & returns", subtitle: "Completed transfers", symbol: "clock.arrow.circlepath", key: "history")
+                        taskLink("My transfers", subtitle: "Ready and assigned to you", symbol: "person.crop.rectangle", key: "inventory")
+                    }
+                } else if !hasPacking { ContentUnavailableView("Warehouse unavailable", systemImage: "shippingbox") }
+                if let message = viewModel.errorMessage { LoadFailureView(message: message) { Task { await reload() } } }
+            }
+            .listStyle(.plain)
+            .listSectionSpacing(12)
+            .workplaceScreen()
+            .navigationTitle("Warehouse")
+            .navigationBarTitleDisplayMode(.large)
+            .refreshable { await reload() }
+            .navigationDestination(for: String.self) { destination($0) }
+            .navigationDestination(for: DeepLink.self) { deepDestination($0) }
+        }
+    }
+
+    private var moreWorkspace: some View {
+        NavigationStack(path: $morePath) {
+            List {
+                if hasManufacturing && matches("Manufacturing") {
+                    Section { taskLink("Manufacturing", subtitle: "Plan and create production", symbol: "gearshape.2", key: "manufacturing") }
+                }
+                Section("Apps") {
+                    ForEach(viewModel.items.filter { !["inventory", "manufacturing", "packing", "settings"].contains($0.key) && matches($0.label) }) { item in
+                        if item.native && item.key == "sales" {
+                            NavigationLink(value: item.key) { WorkplaceActionLabel(title: item.label, subtitle: "Customers and sales orders", symbol: "cart") }
+                        } else if item.webURL != nil {
+                            Button { selectedWebModule = item } label: {
+                                HStack {
+                                    WorkplaceActionLabel(title: item.label, symbol: "square.grid.2x2")
+                                    Image(systemName: "arrow.up.forward").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                }
+                                .frame(minHeight: 44)
+                            }
+                        }
+                    }
+                }
+                Section {
+                    NavigationLink(value: "settings") { WorkplaceActionLabel(title: "Settings", subtitle: "Account, connection, and help", symbol: "gearshape") }
+                } footer: {
+                    Label(networkMonitor.isOnline ? "Connected" : "Offline", systemImage: networkMonitor.isOnline ? "checkmark.icloud" : "wifi.slash")
+                }
+            }
+            .workplaceScreen()
+            .listStyle(.plain)
+            .navigationTitle("More")
+            .searchable(text: $search, prompt: "Find an app")
+            .navigationDestination(for: String.self) { destination($0) }
+            .navigationDestination(for: DeepLink.self) { deepDestination($0) }
+        }
+    }
+
+    private func taskLink(_ title: String, subtitle: String, symbol: String, key: String) -> some View {
+        NavigationLink(value: key) {
+            WorkplaceActionLabel(title: title, subtitle: subtitle, symbol: symbol, emphasized: key == "packing")
+        }
+    }
+    @ViewBuilder private func destination(_ key: String) -> some View {
+        switch key {
+        case "inventory": InventoryView()
+        case "packing": PackingView()
+        case "receipts": InventoryView(scope: .receipts)
+        case "deliveries": InventoryView(scope: .deliveries)
+        case "internal": InventoryView(scope: .internalTransfers)
+        case "stock": StockOperationsView()
+        case "history": InventoryView(scope: .history)
+        case "manufacturing": ManufacturingView()
+        case "sales": SalesView()
+        case "settings": SettingsView()
+        default: ContentUnavailableView("Unavailable", systemImage: "exclamationmark.circle")
+        }
+    }
+    @ViewBuilder private func deepDestination(_ link: DeepLink) -> some View {
+        switch link {
+        case .picking(let id): InventoryDetailView(pickingId: id)
+        case .packingShipment(let id): PackingView(shipmentId: id)
+        case .manufacturingOrder(let id): ManufacturingDetailView(orderId: id, workOrdersFirst: true)
+        case .salesOrder(let id): SalesOrderDetailView(orderId: id)
+        default: EmptyView()
+        }
+    }
+    private func matches(_ value: String) -> Bool { search.isEmpty || value.localizedCaseInsensitiveContains(search) }
     private func reload() async {
-        guard let client = apiProvider.client else { return }
-        await viewModel.load(apiClient: client)
+        if let client = apiProvider.client { await viewModel.load(apiClient: client) }
     }
 }
 
@@ -181,55 +195,11 @@ struct LoadFailureView: View {
     let retry: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Unable to refresh", systemImage: "wifi.exclamationmark").font(.headline)
-            Text(message).foregroundStyle(.secondary)
+            WorkplaceNotice(title: "Unable to refresh", message: message, symbol: "wifi.exclamationmark")
             Button(action: retry) {
-                Text("Try again").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
-            }.buttonStyle(.borderedProminent)
-        }.padding().frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct ModuleTile: View {
-    let item: MenuItem
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: symbol)
-                .font(.title2).foregroundStyle(.tint)
-                .frame(width: 52, height: 52)
-                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-            VStack(alignment: .leading, spacing: 5) {
-                Text(item.label).font(.title3.bold())
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.body.weight(.semibold)).foregroundStyle(.secondary)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
-        .contentShape(Rectangle())
-    }
-
-    private var symbol: String {
-        switch item.key {
-        case "inventory": return "shippingbox"
-        case "manufacturing": return "gearshape.2"
-        case "sales": return "cart"
-        case "settings": return "gearshape"
-        default: return "square.grid.2x2"
-        }
-    }
-
-    private var subtitle: String {
-        switch item.key {
-        case "inventory": return "Pick, scan and complete transfers"
-        case "manufacturing": return "Products, components and work orders"
-        case "sales": return "Find customers and view orders"
-        case "settings": return "Account, connection and sync"
-        default: return "Open in Odoo"
-        }
+                Text("Try again")
+            }.buttonStyle(.bordered).controlSize(.large).tint(WorkplaceTheme.accent)
+        }.padding(.vertical, 4).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -278,7 +248,7 @@ struct OdooWebView: View {
                     Button("Retry") {
                         Task { await fetchAuthenticatedURL() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.borderedProminent).tint(WorkplaceTheme.buttonFill)
                 }
                 .padding()
             }
@@ -379,24 +349,5 @@ struct WebViewRepresentable: UIViewRepresentable {
             parent.isLoading = false
             parent.error = error
         }
-    }
-}
-
-struct WarehouseTaskCard: View {
-    let title: String
-    let subtitle: String
-    let symbol: String
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: symbol).font(.title).foregroundStyle(.tint).frame(width: 48)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.title3.bold())
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "chevron.right").foregroundStyle(.secondary)
-        }
-        .padding(20).frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
     }
 }

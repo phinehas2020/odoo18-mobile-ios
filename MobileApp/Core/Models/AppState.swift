@@ -7,6 +7,8 @@ final class AppState: ObservableObject {
 
 enum DeepLink: Hashable {
     case inventoryHome
+    case packingHome
+    case packingShipment(id: Int)
     case manufacturingHome
     case manufacturingOrder(id: Int)
     case salesHome

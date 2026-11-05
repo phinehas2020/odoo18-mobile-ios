@@ -16,9 +16,11 @@ final class WarehouseScreenRenderingTests: XCTestCase {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
         let client = APIClient(baseURL: URL(string: "https://example.com")!, authStore: AuthStore(), session: URLSession(configuration: config), errorStore: nil)
+        for (name, size) in [("warehouse-manufacturing-screen", DynamicTypeSize.large), ("warehouse-manufacturing-accessibility", .accessibility3)] {
         let view = NavigationStack { ManufacturingDetailView(orderId: 1, workOrdersFirst: true) }
             .environmentObject(APIClientProvider(client: client))
             .environmentObject(NetworkMonitor())
+            .environment(\.dynamicTypeSize, size)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)
         let host = UIHostingController(rootView: view)
@@ -28,10 +30,19 @@ final class WarehouseScreenRenderingTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(800))
         XCTAssertGreaterThan(requests, 0)
         host.view.layoutIfNeeded()
+        func resetScroll(_ view: UIView) {
+            if let scroll = view as? UIScrollView, scroll.contentSize.height > scroll.bounds.height {
+                scroll.setContentOffset(CGPoint(x: 0, y: -scroll.adjustedContentInset.top), animated: false)
+            }
+            view.subviews.forEach(resetScroll)
+        }
+        resetScroll(host.view)
+        try await Task.sleep(for: .milliseconds(200))
         let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
         let image = renderer.image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("warehouse-manufacturing-screen.png")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(name).png")
         try XCTUnwrap(image.pngData()).write(to: url)
         print("WAREHOUSE_SCREEN \(url.path)")
+        }
     }
 }

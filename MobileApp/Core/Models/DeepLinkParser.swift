@@ -6,6 +6,9 @@ struct DeepLinkParser {
            let module = deeplink["module"] as? String {
             let id = deeplink["id"] as? Int
             switch module {
+            case "packing":
+                if let id { return .packingShipment(id: id) }
+                return .packingHome
             case "inventory":
                 if let id { return .picking(id: id) }
                 return .inventoryHome

@@ -1,0 +1,232 @@
+[
+  {
+    "title": "Design principles",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/design-principles",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Designing for iOS",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/designing-for-ios",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Privacy",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/privacy",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Inclusion",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/inclusion",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Branding",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/branding",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Images",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/images",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "App icons",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/app-icons",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Icons",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/icons",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Dark Mode",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/dark-mode",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Right to left",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/right-to-left",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Tab bars",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/tab-bars",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Toolbars",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/toolbars",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Buttons",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/buttons",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Sheets",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/sheets",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Lists and tables",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/lists-and-tables",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Text fields",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/text-fields",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Search fields",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/search-fields",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Alerts",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/alerts",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Action sheets",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/action-sheets",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Progress indicators",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/progress-indicators",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Loading",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/loading",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Feedback",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/feedback",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Entering data",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/entering-data",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Materials",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/materials",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Modality",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/modality",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Managing notifications",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/managing-notifications",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Onboarding",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/onboarding",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Launching",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/launching",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Managing accounts",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/managing-accounts",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Multitasking",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/multitasking",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Keyboards",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/keyboards",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Gestures",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/gestures",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Settings",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/settings",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Offering help",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/offering-help",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Camera Control",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/camera-control",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Virtual keyboards",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/virtual-keyboards",
+    "scope": "Current article text reviewed across the HIG audit team; app-relevant requirements applied or assessed as optional."
+  },
+  {
+    "title": "Accessibility",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/accessibility",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Typography",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/typography",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Color",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/color",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Layout",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/layout",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "SF Symbols",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/sf-symbols",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Motion",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/motion",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Playing haptics",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/playing-haptics",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Writing",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/writing",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Focus and selection",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/focus-and-selection",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  },
+  {
+    "title": "Notifications",
+    "url": "https://developer.apple.com/design/human-interface-guidelines/notifications",
+    "scope": "Read by accessibility auditor via Apple DocC; applicable iOS guidance reviewed."
+  }
+]

@@ -15,6 +15,7 @@ struct RootView: View {
                 HomeView()
             }
         }
+        .tint(WorkplaceTheme.accent)
         .onReceive(NotificationCenter.default.publisher(for: .deepLinkReceived)) { notification in
             guard let userInfo = notification.object as? [AnyHashable: Any],
                   let link = DeepLinkParser.parse(userInfo: userInfo) else { return }

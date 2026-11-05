@@ -2,6 +2,7 @@ import SwiftUI
 import AudioToolbox
 
 struct InventoryDetailView: View {
+    @AppStorage("workplaceHapticsEnabled") private var hapticsEnabled = true
     let pickingId: Int
 
     @EnvironmentObject private var apiProvider: APIClientProvider
@@ -15,114 +16,191 @@ struct InventoryDetailView: View {
     @State private var selectedLine: PickingLine?
     @State private var selectedMove: PickingMove?
     @State private var showReturn = false
+    @FocusState private var barcodeFocused: Bool
 
     var body: some View {
-        VStack(spacing: 12) {
-            if !networkMonitor.isOnline {
-                OfflineBanner(pendingCount: syncEngine.pendingOutboxCount)
-            }
-            if viewModel.needsRefresh {
-                RefreshBanner {
-                    Task {
-                        await viewModel.load(apiClient: apiProvider.client, pickingId: pickingId)
-                    }
-                }
-            }
-
+        Group {
             if let detail = viewModel.detail {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(detail.name).font(.title2).bold()
-                    Text(detail.partnerName ?? "")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack {
-                    TextField("Scan or type barcode", text: $barcodeInput)
-                        .textInputAutocapitalization(.never)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { submitScan() }
-                    Button(action: { showScanner = true }) {
-                        Image(systemName: "barcode.viewfinder")
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                HStack {
-                    Button("Add Scan") { submitScan() }
-                        .buttonStyle(.borderedProminent)
-                    Button("Complete transfer") { confirmCompletion = true }
-                        .buttonStyle(.bordered)
-                }
-
-                .controlSize(.large)
-                .disabled(viewModel.isLoading || viewModel.isSubmitting || viewModel.needsRefresh || ["done", "cancel"].contains(detail.state))
-
-                if !completionBlockers(in: detail).isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("Resolve before completion", systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline.bold())
-                        ForEach(completionBlockers(in: detail), id: \.self) { Text($0).font(.caption) }
-                    }
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                if detail.state == "done" {
-                    Button { showReturn = true } label: {
-                        Label("Return goods", systemImage: "arrow.uturn.backward").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
-                    }.buttonStyle(.bordered).disabled(!networkMonitor.isOnline || viewModel.needsRefresh)
-                }
-                WorkStatusBadge(state: detail.state)
-                Text("From \(detail.sourceLocation.name) → \(detail.destLocation.name)").font(.subheadline).foregroundStyle(.secondary)
-
                 List {
-                    Section("Processed lines") {
-                        ForEach(detail.lines) { line in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(line.productName).font(.headline)
-                                Text("Done \(line.qtyDone.formatted()) / \(line.qtyDemanded.formatted()) \(line.uomName ?? "")")
-                                    .font(.caption)
-                                if line.tracking == "lot" || line.tracking == "serial" {
-                                    Text("\(line.tracking == "serial" ? "Serial" : "Lot"): \(line.lotName ?? "Required")")
-                                        .font(.caption)
-                                        .foregroundStyle(line.qtyDone > 0 && line.lotName == nil ? Color.orange : Color.secondary)
-                                }
-                                ProgressView(value: line.qtyDemanded == 0 ? 0 : line.qtyDone / line.qtyDemanded)
-                                if detail.pickingTypeCode == "incoming" && !["done", "cancel"].contains(detail.state) {
-                                    Button("Edit received quantity") { selectedLine = line }
-                                        .buttonStyle(.bordered)
-                                        .disabled(viewModel.isSubmitting || viewModel.needsRefresh || !networkMonitor.isOnline)
+                    if !networkMonitor.isOnline || viewModel.needsRefresh {
+                        Section {
+                            if !networkMonitor.isOnline {
+                                OfflineBanner(pendingCount: syncEngine.pendingOutboxCount)
+                            }
+                            if viewModel.needsRefresh {
+                                RefreshBanner {
+                                    Task {
+                                        await viewModel.load(apiClient: apiProvider.client, pickingId: pickingId)
+                                    }
                                 }
                             }
                         }
                     }
+
+                    Section {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(detail.name).font(.headline).accessibilityAddTraits(.isHeader)
+                            if let partner = detail.partnerName, !partner.isEmpty {
+                                Text(partner).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            WorkStatusBadge(state: detail.state)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("From: \(detail.sourceLocation.name)", systemImage: "mappin.and.ellipse")
+                                Label("To: \(detail.destLocation.name)", systemImage: "arrow.down.right")
+                            }.font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    Section("Items") {
+                        ForEach(detail.lines) { line in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(line.productName).font(.headline)
+                                Text("Done \(line.qtyDone.formatted()) / \(line.qtyDemanded.formatted()) \(line.uomName ?? "")")
+                                    .font(.title3.weight(.semibold)).monospacedDigit()
+                                    .foregroundStyle(WorkplaceTheme.accent)
+                                if line.tracking == "lot" || line.tracking == "serial" {
+                                    Label("\(line.tracking == "serial" ? "Serial" : "Lot"): \(line.lotName ?? "Required")", systemImage: "tag")
+                                        .font(.subheadline)
+                                        .foregroundStyle(line.qtyDone > 0 && line.lotName == nil ? WorkplaceTheme.attention : Color.secondary)
+                                }
+                                ProgressView(value: line.qtyDemanded == 0 ? 0 : min(1, max(0, line.qtyDone / line.qtyDemanded)))
+                                    .accessibilityLabel("Progress for \(line.productName)")
+                                    .accessibilityValue("\(line.qtyDone.formatted()) of \(line.qtyDemanded.formatted()) \(line.uomName ?? "") processed")
+                                if detail.pickingTypeCode == "incoming" && !["done", "cancel"].contains(detail.state) {
+                                    Button { selectedLine = line } label: {
+                                        Label("Edit quantity", systemImage: "pencil")
+                                    }
+                                        .buttonStyle(.bordered)
+                                        .frame(minHeight: 44)
+                                        .accessibilityLabel("Edit received quantity for \(line.productName)")
+                                        .accessibilityValue("\(line.qtyDone.formatted()) \(line.uomName ?? "")")
+                                        .disabled(viewModel.isSubmitting || viewModel.needsRefresh || !networkMonitor.isOnline)
+                                }
+                            }.padding(.vertical, 8)
+                        }
+                    }
+
                     if detail.pickingTypeCode == "incoming" && !unstartedMoves(in: detail).isEmpty {
                         Section("Not received") {
                             ForEach(unstartedMoves(in: detail)) { move in
-                                VStack(alignment: .leading, spacing: 6) {
+                                VStack(alignment: .leading, spacing: 10) {
                                     Text(move.productName).font(.headline)
                                     Text("Demanded \(move.qtyDemanded.formatted()) \(move.uomName ?? "")")
-                                        .font(.caption)
+                                        .font(.subheadline.weight(.medium)).monospacedDigit()
                                         .foregroundStyle(.secondary)
-                                    Button("Receive product") { selectedMove = move }
-                                        .buttonStyle(.borderedProminent)
+                                    Button { selectedMove = move } label: {
+                                        Label("Receive product", systemImage: "tray.and.arrow.down")
+                                    }
+                                        .buttonStyle(.bordered)
+                                        .frame(minHeight: 44)
+                                        .accessibilityLabel("Receive \(move.productName)")
+                                        .accessibilityValue("\(move.qtyDemanded.formatted()) \(move.uomName ?? "") expected")
                                         .disabled(viewModel.isSubmitting || viewModel.needsRefresh || !networkMonitor.isOnline)
-                                }
+                                }.padding(.vertical, 8)
                             }
                         }
                     }
+
+                    if !completionBlockers(in: detail).isEmpty {
+                        Section {
+                            WorkplaceNotice(title: "Resolve before completion",
+                                message: completionBlockers(in: detail).joined(separator: "\n"),
+                                symbol: "exclamationmark.triangle.fill")
+                        }
+                    }
+
+                    if isEditable(detail) {
+                        Section {
+                            DisclosureGroup("Enter barcode manually") {
+                            TextField("Barcode", text: $barcodeInput)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .frame(minHeight: 44)
+                                .focused($barcodeFocused)
+                                .accessibilityLabel("Product barcode")
+                                .submitLabel(.done)
+                                .onSubmit { submitScan() }
+                            Button("Add barcode") { submitScan() }
+                                .buttonStyle(.bordered)
+                                .frame(minHeight: 44)
+                                .disabled(barcodeInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                        .disabled(viewModel.isLoading || viewModel.isSubmitting || viewModel.needsRefresh)
+                    }
+
+                    if detail.state == "done" {
+                        Section {
+                            Button { showReturn = true } label: {
+                                WorkplaceActionLabel(title: "Return goods", subtitle: "Review quantities and create a return transfer.", symbol: "arrow.uturn.backward")
+                            }
+                            .accessibilityLabel("Return goods from \(detail.name)")
+                            .disabled(!networkMonitor.isOnline || viewModel.needsRefresh)
+                        }
+                    }
                 }
+                .listStyle(.insetGrouped)
+                .scrollDismissesKeyboard(.interactively)
+                .workplaceScreen()
             } else if viewModel.isLoading {
-                ProgressView()
+                ProgressView("Loading transfer details…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Text("No data available")
-                    .foregroundColor(.secondary)
+                VStack(spacing: 16) {
+                    ContentUnavailableView(
+                        "No transfer data",
+                        systemImage: "shippingbox",
+                        description: Text("The transfer could not be loaded.")
+                    )
+                    Button("Try again") {
+                        Task { await viewModel.load(apiClient: apiProvider.client, pickingId: pickingId) }
+                    }
+                    .buttonStyle(.bordered).controlSize(.large)
+                    .padding(.bottom, 24)
+                }
             }
         }
-        .padding()
-        .navigationTitle("Transfer")
+        .navigationTitle(transferTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .background(WorkplaceTheme.canvas)
+        .tint(WorkplaceTheme.accent)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { barcodeFocused = false }
+            }
+            if let detail = viewModel.detail, isEditable(detail) {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showScanner = true
+                    } label: {
+                        Label("Scan", systemImage: "barcode.viewfinder")
+                    }
+                    .accessibilityLabel("Scan barcode")
+                    .disabled(viewModel.isLoading || viewModel.isSubmitting || viewModel.needsRefresh)
+                }
+            }
+        }
+        .workplaceBottomBar {
+            if let detail = viewModel.detail, isEditable(detail) {
+                Button {
+                    confirmCompletion = true
+                } label: {
+                    HStack(spacing: 10) {
+                        if viewModel.isSubmitting { ProgressView().tint(.white) }
+                        Label(viewModel.isSubmitting ? "Saving…" : "Review \(transferTitle.lowercased())", systemImage: "checklist")
+                            .fontWeight(.semibold)
+                    }.frame(maxWidth: .infinity, minHeight: 28)
+                }
+                .workplaceProminentControl()
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
+                .disabled(viewModel.isLoading || viewModel.isSubmitting || viewModel.needsRefresh)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+        }
         .confirmationDialog("Complete this transfer in Odoo?", isPresented: $confirmCompletion, titleVisibility: .visible) {
             Button("Complete transfer") { submitValidate() }
             Button("Cancel", role: .cancel) {}
@@ -256,17 +334,29 @@ struct InventoryDetailView: View {
         return (detail.moves ?? []).filter { !representedMoveIds.contains($0.id) && $0.qtyDone == 0 }
     }
 
+    private var transferTitle: String {
+        switch viewModel.detail?.pickingTypeCode {
+        case "incoming": return "Receipt"
+        case "outgoing": return "Delivery"
+        default: return "Transfer"
+        }
+    }
+
+    private func isEditable(_ detail: PickingDetail) -> Bool {
+        !["done", "cancel"].contains(detail.state)
+    }
+
     private func playFeedback(for status: String) {
         let generator = UINotificationFeedbackGenerator()
         switch status {
         case "success", "validated":
-            generator.notificationOccurred(.success)
+            if hapticsEnabled { generator.notificationOccurred(.success) }
             AudioServicesPlaySystemSound(1104)
         case "queued":
-            generator.notificationOccurred(.warning)
+            if hapticsEnabled { generator.notificationOccurred(.warning) }
             AudioServicesPlaySystemSound(1054)
         default:
-            generator.notificationOccurred(.error)
+            if hapticsEnabled { generator.notificationOccurred(.error) }
             AudioServicesPlaySystemSound(1073)
         }
     }
@@ -281,6 +371,14 @@ private struct ReceiptMoveEditor: View {
     @State private var lotName = ""
     @State private var isSaving = false
     @State private var validationMessage: String?
+    @State private var confirmDiscard = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case quantity, lot }
+    private var initialQuantity: String {
+        move.tracking == "serial" ? "1" : move.qtyDemanded.formatted(.number.precision(.fractionLength(0...3)))
+    }
+    private var hasUnsavedChanges: Bool { quantityText != initialQuantity || !lotName.isEmpty }
 
     init(move: PickingMove, onSave: @escaping (Double, String?) async -> Bool) {
         self.move = move
@@ -291,32 +389,71 @@ private struct ReceiptMoveEditor: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Text(move.productName).font(.headline).accessibilityAddTraits(.isHeader)
+                }
                 Section("Received") {
                     TextField("Quantity", text: $quantityText).keyboardType(.decimalPad)
+                        .font(.title2.weight(.semibold)).monospacedDigit().frame(minHeight: 44)
+                        .focused($focusedField, equals: .quantity)
+                        .accessibilityLabel("Received quantity for \(move.productName)")
+                        .accessibilityValue("\(quantityText) \(move.uomName ?? "")")
                     Text("Demanded: \(move.qtyDemanded.formatted()) \(move.uomName ?? "")")
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
                 if move.tracking == "lot" || move.tracking == "serial" {
                     Section(move.tracking == "serial" ? "Serial number" : "Lot") {
                         TextField(move.tracking == "serial" ? "Serial number" : "Lot name", text: $lotName)
                             .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled().frame(minHeight: 44)
+                            .focused($focusedField, equals: .lot)
+                            .accessibilityLabel("\(move.tracking == "serial" ? "Serial number" : "Lot") for \(move.productName)")
+                            .submitLabel(.done)
+                            .onSubmit { focusedField = nil }
                         if move.tracking == "serial" {
                             Text("Receive one serial at a time. Use Receive product again for the next serial.")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
                 }
                 if let validationMessage {
-                    Section { Text(validationMessage).foregroundStyle(.red) }
+                    Section {
+                        WorkplaceNotice(title: "Check the received quantity", message: validationMessage,
+                            symbol: "exclamationmark.circle", tint: WorkplaceTheme.danger)
+                    }
                 }
+                if isSaving { ProgressView("Saving received quantity…").frame(maxWidth: .infinity, minHeight: 44) }
             }
-            .navigationTitle(move.productName)
+            .disabled(isSaving)
+            .scrollDismissesKeyboard(.interactively)
+            .workplaceScreen()
+            .navigationTitle("Receive product")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(isSaving) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { cancel() }.disabled(isSaving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }.disabled(isSaving)
+                        .accessibilityLabel("Save received quantity for \(move.productName)")
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    if focusedField == .quantity && (move.tracking == "lot" || move.tracking == "serial") {
+                        Button("Next") { focusedField = .lot }
+                    }
+                    Spacer()
+                    Button("Done") { focusedField = nil }
+                }
             }
+            .confirmationDialog("Discard changes?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Discard changes", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
+            } message: { Text("Your changes to \(move.productName) haven’t been saved.") }
         }
+        .interactiveDismissDisabled(isSaving || hasUnsavedChanges)
+    }
+
+    private func cancel() {
+        focusedField = nil
+        if hasUnsavedChanges { confirmDiscard = true } else { dismiss() }
     }
 
     private func save() {
@@ -353,6 +490,13 @@ private struct ReceiptLineEditor: View {
     @State private var lotName: String
     @State private var isSaving = false
     @State private var validationMessage: String?
+    @State private var confirmDiscard = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case quantity, lot }
+    private var hasUnsavedChanges: Bool {
+        quantityText != line.qtyDone.formatted(.number.precision(.fractionLength(0...3))) || lotName != (line.lotName ?? "")
+    }
 
     init(
         line: PickingLine,
@@ -369,36 +513,73 @@ private struct ReceiptLineEditor: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Text(line.productName).font(.headline).accessibilityAddTraits(.isHeader)
+                }
                 Section("Received") {
                     TextField("Quantity", text: $quantityText)
                         .keyboardType(.decimalPad)
+                        .font(.title2.weight(.semibold)).monospacedDigit().frame(minHeight: 44)
+                        .focused($focusedField, equals: .quantity)
+                        .accessibilityLabel("Received quantity for \(line.productName)")
+                        .accessibilityValue("\(quantityText) \(line.uomName ?? "")")
                     Text("Demanded: \(line.qtyDemanded.formatted()) \(line.uomName ?? "")")
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
                 if line.tracking == "lot" || line.tracking == "serial" {
                     Section(line.tracking == "serial" ? "Serial number" : "Lot") {
                         TextField(line.tracking == "serial" ? "Serial number" : "Lot name", text: $lotName)
                             .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled().frame(minHeight: 44)
+                            .focused($focusedField, equals: .lot)
+                            .accessibilityLabel("\(line.tracking == "serial" ? "Serial number" : "Lot") for \(line.productName)")
+                            .submitLabel(.done)
+                            .onSubmit { focusedField = nil }
                         if line.lotId == nil && permitsNewLot {
                             Text("If this name does not exist, Odoo may create it for this receipt when the operation allows new lots.")
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
                 if let validationMessage {
-                    Section { Text(validationMessage).foregroundStyle(.red) }
+                    Section {
+                        WorkplaceNotice(title: "Check the received quantity", message: validationMessage,
+                            symbol: "exclamationmark.circle", tint: WorkplaceTheme.danger)
+                    }
                 }
+                if isSaving { ProgressView("Saving received quantity…").frame(maxWidth: .infinity, minHeight: 44) }
             }
-            .navigationTitle(line.productName)
+            .disabled(isSaving)
+            .scrollDismissesKeyboard(.interactively)
+            .workplaceScreen()
+            .navigationTitle("Received quantity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { cancel() }.disabled(isSaving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }.disabled(isSaving)
+                        .accessibilityLabel("Save received quantity for \(line.productName)")
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    if focusedField == .quantity && (line.tracking == "lot" || line.tracking == "serial") {
+                        Button("Next") { focusedField = .lot }
+                    }
+                    Spacer()
+                    Button("Done") { focusedField = nil }
                 }
             }
+            .confirmationDialog("Discard changes?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Discard changes", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
+            } message: { Text("Your changes to \(line.productName) haven’t been saved.") }
         }
+        .interactiveDismissDisabled(isSaving || hasUnsavedChanges)
+    }
+
+    private func cancel() {
+        focusedField = nil
+        if hasUnsavedChanges { confirmDiscard = true } else { dismiss() }
     }
 
     private func save() {
@@ -429,15 +610,9 @@ struct OfflineBanner: View {
     let pendingCount: Int
 
     var body: some View {
-        HStack {
-            Image(systemName: "wifi.slash")
-            Text("Offline · \(pendingCount) pending")
-                .font(.caption)
-            Spacer()
-        }
-        .padding(8)
-        .background(Color.orange.opacity(0.2))
-        .cornerRadius(8)
+        WorkplaceNotice(title: "You’re offline",
+            message: pendingCount > 0 ? "\(pendingCount) changes are waiting to sync. Connect before updating inventory." : "Connect before updating inventory.",
+            symbol: "wifi.slash")
     }
 }
 
@@ -445,19 +620,15 @@ struct RefreshBanner: View {
     let onRefresh: () -> Void
 
     var body: some View {
-        HStack {
-            Image(systemName: "exclamationmark.triangle")
-            Text("Updates available. Refresh required.")
-                .font(.caption)
-            Spacer()
+        VStack(alignment: .leading, spacing: 12) {
+            WorkplaceNotice(title: "Refresh required",
+                message: "Load the latest quantities before continuing.", symbol: "arrow.clockwise")
             Button("Refresh") {
                 onRefresh()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.bordered).controlSize(.large)
         }
-        .padding(8)
-        .background(Color.yellow.opacity(0.2))
-        .cornerRadius(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
