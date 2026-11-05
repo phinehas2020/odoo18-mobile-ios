@@ -15,4 +15,6 @@ enum DeepLink: Hashable {
     case settings
     case picking(id: Int)
     case salesOrder(id: Int)
+    case todoHome
+    case todo(id: Int)
 }

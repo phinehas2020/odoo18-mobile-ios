@@ -19,6 +19,8 @@ struct HomeView: View {
     private var hasInventory: Bool { viewModel.items.contains { $0.key == "inventory" } }
     private var hasManufacturing: Bool { viewModel.items.contains { $0.key == "manufacturing" } }
     private var hasPacking: Bool { viewModel.items.contains { $0.key == "packing" && $0.native } }
+    /// Odoo's To-Do app (`project_todo`) is handled natively instead of in a web view.
+    static func isTodo(_ item: MenuItem) -> Bool { ["project_todo", "todo"].contains(item.key) }
 
     var body: some View {
         workspaceTabs
@@ -42,6 +44,8 @@ struct HomeView: View {
             case .salesHome: tab = "more"; morePath.append("sales")
             case .salesOrder: tab = "more"; morePath.append(link)
             case .settings: tab = "more"; morePath.append("settings")
+            case .todoHome: tab = "more"; morePath.append("todo")
+            case .todo: tab = "more"; morePath.append(link)
             }
             appState.deepLink = nil
         }
@@ -129,6 +133,8 @@ struct HomeView: View {
                     ForEach(viewModel.items.filter { !["inventory", "manufacturing", "packing", "settings"].contains($0.key) && matches($0.label) }) { item in
                         if item.native && item.key == "sales" {
                             NavigationLink(value: item.key) { WorkplaceActionLabel(title: item.label, subtitle: "Customers and sales orders", symbol: "cart") }
+                        } else if Self.isTodo(item) {
+                            NavigationLink(value: "todo") { WorkplaceActionLabel(title: item.label, subtitle: "Your personal tasks", symbol: "checklist") }
                         } else if item.webURL != nil {
                             Button { selectedWebModule = item } label: {
                                 HStack {
@@ -171,6 +177,7 @@ struct HomeView: View {
         case "history": InventoryView(scope: .history)
         case "manufacturing": ManufacturingView()
         case "sales": SalesView()
+        case "todo": TodoListView()
         case "settings": SettingsView()
         default: ContentUnavailableView("Unavailable", systemImage: "exclamationmark.circle")
         }
@@ -181,6 +188,7 @@ struct HomeView: View {
         case .packingShipment(let id): PackingView(shipmentId: id)
         case .manufacturingOrder(let id): ManufacturingDetailView(orderId: id, workOrdersFirst: true)
         case .salesOrder(let id): SalesOrderDetailView(orderId: id)
+        case .todo(let id): TodoDetailView(taskId: id)
         default: EmptyView()
         }
     }

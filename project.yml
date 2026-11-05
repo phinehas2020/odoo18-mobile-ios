@@ -41,6 +41,7 @@ targets:
     settings:
       base:
         SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: MobileOdoo
   MobileOdooUITests:
@@ -52,6 +53,7 @@ targets:
     settings:
       base:
         SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: MobileOdoo
 schemes:

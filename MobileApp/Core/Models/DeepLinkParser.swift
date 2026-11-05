@@ -18,6 +18,9 @@ struct DeepLinkParser {
             case "sales":
                 if let id { return .salesOrder(id: id) }
                 return .salesHome
+            case "todo", "project_todo":
+                if let id { return .todo(id: id) }
+                return .todoHome
             case "settings":
                 return .settings
             default:
