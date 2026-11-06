@@ -74,7 +74,7 @@ private struct PackingWorkspaceView: View {
                                                         client: apiProvider.client, online: networkMonitor.isOnline)
                             }
                         }
-                        .listRowBackground(item.isConfirmed ? WorkplaceTheme.accent.opacity(0.04) : WorkplaceTheme.surface)
+                        .listRowBackground(WorkplaceTheme.surface)
                         .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                     }
                 } header: {
@@ -135,11 +135,6 @@ private struct PackingWorkspaceView: View {
                             Text("Scan a shipping label").font(.title2.weight(.semibold))
                             Text("See this box’s products and quantities.").font(.subheadline).foregroundStyle(.secondary)
                         }
-                        Image(systemName: "barcode.viewfinder")
-                            .font(.system(size: 64, weight: .ultraLight))
-                            .foregroundStyle(WorkplaceTheme.accent)
-                            .frame(maxWidth: .infinity).padding(.vertical, 32)
-                            .accessibilityHidden(true)
                         Button { scanMode = .lookup } label: {
                             Label("Scan shipping label", systemImage: "viewfinder")
                         }.workplaceProminentControl()
@@ -250,7 +245,7 @@ private struct PackingWorkspaceView: View {
         HStack(alignment: .top, spacing: 14) {
             Text(number).font(.caption.monospaced().weight(.medium))
                 .foregroundStyle(WorkplaceTheme.accent).frame(width: 28, height: 28)
-                .background(WorkplaceTheme.accent.opacity(0.08), in: Circle())
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.medium))
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -346,8 +341,7 @@ private struct PackingCardInstruction: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
-        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("packing.discountCard")
     }

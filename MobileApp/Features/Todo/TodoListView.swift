@@ -12,13 +12,12 @@ struct TodoListView: View {
         let sections = model.sections(matching: search)
         List {
             Section {
-                HStack(spacing: 4) {
-                    ForEach(TodoFilter.allCases) { option in
-                        WorkplaceFilterButton(title: option.title, selected: model.filter == option) {
-                            Task { await model.setFilter(option, client: apiProvider.client) }
-                        }
-                    }
-                }
+                Picker("Tasks", selection: Binding(get: { model.filter }, set: { option in
+                    Task { await model.setFilter(option, client: apiProvider.client) }
+                })) {
+                    ForEach(TodoFilter.allCases) { Text($0.title).tag($0) }
+                }.pickerStyle(.segmented)
+
             }.listRowBackground(Color.clear).listRowSeparator(.hidden).listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
 
             if let message = model.actionMessage {
@@ -41,7 +40,7 @@ struct TodoListView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .workplaceScreen()
         .navigationTitle("To-do")
         .searchable(text: $search, prompt: "Search to-dos")

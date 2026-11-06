@@ -26,7 +26,7 @@ struct InventoryView: View {
         }
       }
     }
-    .listStyle(.insetGrouped)
+    .listStyle(.plain)
     .workplaceScreen()
     .navigationTitle(scope.title)
     .searchable(text: $searchText, prompt: "Search by name or customer")

@@ -112,8 +112,8 @@ struct HomeView: View {
                 } else if !hasPacking { ContentUnavailableView("Warehouse unavailable", systemImage: "shippingbox") }
                 if let message = viewModel.errorMessage { LoadFailureView(message: message) { Task { await reload() } } }
             }
-            .listStyle(.plain)
-            .listSectionSpacing(12)
+            .listStyle(.insetGrouped)
+
             .workplaceScreen()
             .navigationTitle("Warehouse")
             .navigationBarTitleDisplayMode(.large)
@@ -153,7 +153,7 @@ struct HomeView: View {
                 }
             }
             .workplaceScreen()
-            .listStyle(.plain)
+            .listStyle(.insetGrouped)
             .navigationTitle("More")
             .searchable(text: $search, prompt: "Find an app")
             .navigationDestination(for: String.self) { destination($0) }

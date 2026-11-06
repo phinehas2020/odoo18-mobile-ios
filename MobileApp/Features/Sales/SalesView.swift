@@ -25,7 +25,7 @@ struct SalesView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .workplaceScreen()
         .navigationTitle("Sales orders")
         .searchable(text: $searchText, prompt: "Search by name or customer")

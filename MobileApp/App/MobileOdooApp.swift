@@ -23,7 +23,11 @@ struct MobileOdooApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+                if ProcessInfo.processInfo.arguments.contains("--test-scanner") {
+                    NavigationStack { ScannerTestView() }
+                } else { RootView() }
+            }
                 .environmentObject(authStore)
                 .environmentObject(appState)
                 .environmentObject(config)

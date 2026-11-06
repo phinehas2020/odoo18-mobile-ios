@@ -11,76 +11,49 @@ struct LoginView: View {
   private enum Field { case login, password, server, database }
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 28) {
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Homestead Gristmill").font(.title2.weight(.semibold))
-          Text("Team app").font(.subheadline).foregroundStyle(.secondary)
-        }.padding(.top, 28).padding(.bottom, 8)
-
-        VStack(alignment: .leading, spacing: 16) {
-          Text("Sign in").font(.title2.weight(.semibold))
-          VStack(alignment: .leading, spacing: 7) {
-            Text("Email or username").font(.subheadline.weight(.medium))
-            TextField("Login", text: $viewModel.login)
-              .textInputAutocapitalization(.never).autocorrectionDisabled()
-              .textContentType(.username).textFieldStyle(.roundedBorder)
-              .accessibilityLabel("Email or username")
-              .focused($focusedField, equals: .login).submitLabel(.next)
-              .onSubmit { focusedField = .password }
-              .frame(minHeight: 44)
+    NavigationStack {
+      Form {
+        Section {
+          TextField("Email or username", text: $viewModel.login)
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+            .textContentType(.username)
+            .focused($focusedField, equals: .login).submitLabel(.next)
+            .onSubmit { focusedField = .password }
+          SecureField("Password", text: $viewModel.password)
+            .textContentType(.password)
+            .focused($focusedField, equals: .password).submitLabel(.go)
+            .onSubmit { if !viewModel.isLoading { login() } }
+        } header: { Text("Homestead Gristmill") }
+        Section {
+          if let error = viewModel.errorMessage {
+            WorkplaceNotice(title: "Couldn’t sign in", message: error, symbol: "exclamationmark.circle", tint: WorkplaceTheme.danger)
           }
-          VStack(alignment: .leading, spacing: 7) {
-            Text("Password").font(.subheadline.weight(.medium))
-            SecureField("Password", text: $viewModel.password)
-              .textContentType(.password).textFieldStyle(.roundedBorder).frame(minHeight: 44)
-              .focused($focusedField, equals: .password).submitLabel(.go)
-              .onSubmit { if !viewModel.isLoading { login() } }
-          }
-
-        if let error = viewModel.errorMessage {
-          WorkplaceNotice(title: "Couldn’t sign in", message: error, symbol: "exclamationmark.circle", tint: WorkplaceTheme.danger)
+          Button(action: login) {
+            HStack {
+              Text(viewModel.isLoading ? "Signing in…" : "Sign in")
+              Spacer()
+              if viewModel.isLoading { ProgressView().accessibilityHidden(true) }
+            }.frame(minHeight: 44)
+          }.disabled(viewModel.isLoading)
         }
-
-        Button(action: login) {
-          HStack {
-            if viewModel.isLoading { ProgressView().tint(.white).accessibilityHidden(true) }
-            Text(viewModel.isLoading ? "Signing in…" : "Sign in")
-          }.frame(maxWidth: .infinity, minHeight: 44)
-        }
-        .workplaceProminentControl()
-        .controlSize(.large)
-        .frame(minHeight: 56)
-        .frame(maxWidth: .infinity)
-        .disabled(viewModel.isLoading)
-        }
-        .padding(20).background(WorkplaceTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-
-        VStack(alignment: .leading, spacing: 12) {
-          if let host = config.baseURL?.host {
-            Label(host, systemImage: "building.2").font(.subheadline).foregroundStyle(.secondary)
-          }
+        Section {
           DisclosureGroup("Connection settings", isExpanded: $showConnection) {
-            VStack(alignment: .leading, spacing: 12) {
-              TextField("Server URL", text: $serverURLText)
-                .textInputAutocapitalization(.never).keyboardType(.URL).autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder).frame(minHeight: 44)
-                .accessibilityLabel("Server URL")
-                .focused($focusedField, equals: .server).submitLabel(.next)
-                .onSubmit { focusedField = .database }
-              TextField("Database", text: $config.database)
-                .textInputAutocapitalization(.never).textFieldStyle(.roundedBorder).frame(minHeight: 44)
-                .focused($focusedField, equals: .database).submitLabel(.done)
-                .onSubmit { focusedField = nil }
-            }.padding(.top, 10)
-          }.font(.subheadline)
-        }.padding(.horizontal, 4)
-
-        Spacer()
+            TextField("Server URL", text: $serverURLText)
+              .textInputAutocapitalization(.never).keyboardType(.URL).autocorrectionDisabled()
+              .accessibilityLabel("Server URL")
+              .focused($focusedField, equals: .server).submitLabel(.next)
+              .onSubmit { focusedField = .database }
+            TextField("Database", text: $config.database)
+              .textInputAutocapitalization(.never).autocorrectionDisabled()
+              .focused($focusedField, equals: .database).submitLabel(.done)
+              .onSubmit { focusedField = nil }
+          }
+        } footer: { if let host = config.baseURL?.host { Text(host) } }
       }
-      .padding(24)
+      .navigationTitle("Sign in")
+      .navigationBarTitleDisplayMode(.inline)
     }
-    .background(WorkplaceTheme.canvas).tint(WorkplaceTheme.accent)
+    .tint(WorkplaceTheme.accent)
     .scrollDismissesKeyboard(.interactively)
     .onChange(of: viewModel.errorMessage) { _, message in
       if let message { UIAccessibility.post(notification: .announcement, argument: "Couldn’t sign in. \(message)") }

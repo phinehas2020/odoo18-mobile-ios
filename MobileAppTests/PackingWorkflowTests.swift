@@ -309,41 +309,15 @@ final class PackingWorkflowTests: XCTestCase {
         XCTAssertTrue(cleared.canFinish)
     }
 
-    func testScannerWaitsForPreviewGeometryAndVideoFormat() {
-        let bounds = CGRect(x: 0, y: 0, width: 390, height: 700)
-        let video = CGSize(width: 1920, height: 1080)
-        func ready(_ view: CGRect = bounds, _ preview: CGRect = bounds,
-                   _ dimensions: CGSize = video, running: Bool = true, previewing: Bool = true) -> Bool {
-            ScannerGeometry.canConvertRegion(viewBounds: view, previewBounds: preview,
-                                             videoDimensions: dimensions, sessionRunning: running, previewing: previewing)
+    func testRepeatedScanningAcceptsEachLabelOnceAndResets() {
+        var gate = BarcodeCandidateGate()
+        for index in 0..<50 {
+            let label = BarcodeCandidate(barcode: "TEST-\(index)", symbology: "code128")
+            XCTAssertNil(gate.accept([]))
+            XCTAssertEqual(gate.accept([label, label]), [label])
+            XCTAssertNil(gate.accept([label]))
+            gate.reset()
         }
-        XCTAssertFalse(ready(.zero))
-        XCTAssertFalse(ready(bounds, .zero))
-        XCTAssertFalse(ready(bounds, bounds, .zero))
-        XCTAssertFalse(ready(running: false))
-        XCTAssertFalse(ready(previewing: false))
-        XCTAssertTrue(ready())
-    }
-
-    func testInvalidScannerRegionsCannotDisableDetection() {
-        for rect in [CGRect.zero, .null, .infinite,
-                     CGRect(x: CGFloat.nan, y: 0, width: 1, height: 1),
-                     CGRect(x: 0, y: 0, width: CGFloat.infinity, height: 1),
-                     CGRect(x: 0, y: 0, width: -1, height: 1),
-                     CGRect(x: 2, y: 2, width: 1, height: 1)] {
-            XCTAssertEqual(ScannerGeometry.validatedRegion(rect), ScannerGeometry.fullFrameRegion)
-        }
-    }
-
-    func testValidScannerRegionIsPreservedAndClippedToImage() {
-        let region = CGRect(x: 0.2, y: 0.3, width: 0.6, height: 0.2)
-        let validated = ScannerGeometry.validatedRegion(region)
-        XCTAssertEqual(validated.origin.x, region.origin.x, accuracy: 0.000001)
-        XCTAssertEqual(validated.origin.y, region.origin.y, accuracy: 0.000001)
-        XCTAssertEqual(validated.size.width, region.size.width, accuracy: 0.000001)
-        XCTAssertEqual(validated.size.height, region.size.height, accuracy: 0.000001)
-        XCTAssertEqual(ScannerGeometry.validatedRegion(CGRect(x: -0.25, y: 0, width: 1.5, height: 1)),
-                       ScannerGeometry.fullFrameRegion)
     }
 
     func testReviewAndPartialBoxStatesNeverClaimOrderReady() throws {

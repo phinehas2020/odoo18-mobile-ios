@@ -25,14 +25,13 @@ struct ManufacturingView: View {
             Section {
                 Text("\(model.orders.count) open orders · \(model.orders.filter { $0.state == "progress" }.count) in progress")
                     .font(.caption).foregroundStyle(.secondary)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        WorkplaceFilterButton(title: "All", selected: stateFilter == "all") { stateFilter = "all" }
-                        ForEach(Array(Set(model.orders.map(\.state))).sorted(), id: \.self) { state in
-                            WorkplaceFilterButton(title: warehouseStateLabel(state), selected: stateFilter == state) { stateFilter = state }
-                        }
+                Picker("Status", selection: $stateFilter) {
+                    Text("All").tag("all")
+                    ForEach(Array(Set(model.orders.map(\.state))).sorted(), id: \.self) { state in
+                        Text(warehouseStateLabel(state)).tag(state)
                     }
                 }
+
             }.listRowBackground(Color.clear).listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 6, trailing: 0))
             Section {

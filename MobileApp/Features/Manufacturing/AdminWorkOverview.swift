@@ -97,7 +97,7 @@ struct AdminWorkOverview: View {
             }
         }
         .navigationTitle("Production")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Employee, order or product")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -127,15 +127,14 @@ struct AdminWorkOverview: View {
                     Text("\(orders.count) open orders · \(orders.filter { $0.status == "running" }.count) running")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        WorkplaceFilterButton(title: "All work", selected: filter == "all") { filter = "all" }
-                        WorkplaceFilterButton(title: "Running", selected: filter == "running") { filter = "running" }
-                        WorkplaceFilterButton(title: "Attention", selected: filter == "attention") { filter = "attention" }
-                        WorkplaceFilterButton(title: "Ready", selected: filter == "ready") { filter = "ready" }
-                        WorkplaceFilterButton(title: "Waiting", selected: filter == "waiting") { filter = "waiting" }
-                    }
+                Picker("Show", selection: $filter) {
+                    Text("All work").tag("all")
+                    Text("Running").tag("running")
+                    Text("Needs attention").tag("attention")
+                    Text("Ready").tag("ready")
+                    Text("Waiting").tag("waiting")
                 }
+
             }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             if let message = model.error { Section { LoadFailureView(message: message) { Task { await reload() } } } }
             if !network.isOnline { Section { Label("Offline — showing the last update", systemImage: "wifi.slash").font(.subheadline).foregroundStyle(.secondary) } }

@@ -41,23 +41,18 @@ struct BarcodeScannerView: View {
                     ScannerTarget()
                 }
 
-                GeometryReader { geometry in
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            cameraMessage
-                            Spacer(minLength: 24)
-                            resultPanel
-                        }
-                        .frame(maxWidth: .infinity, minHeight: max(0, geometry.size.height - 32), alignment: .bottom)
-                        .padding(16)
-                    }.scrollBounceBehavior(.basedOnSize)
-                }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 12) { cameraMessage; resultPanel }
+                        .frame(maxWidth: .infinity).padding(16)
+                }.frame(height: textSize.isAccessibilitySize ? 260 : 200).clipped().background(.bar)
+            }
+
             .background(Color.black)
             .navigationTitle("Scan barcode")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -73,6 +68,10 @@ struct BarcodeScannerView: View {
         switch cameraState {
         case .checkingPermission:
             Label("Checking camera access…", systemImage: "camera").scannerMessageStyle()
+        case .starting:
+            ProgressView("Starting camera…").scannerMessageStyle()
+        case .interrupted:
+            Label("Camera paused. Return to the app to resume.", systemImage: "camera").scannerMessageStyle()
         case .requestingPermission:
             Label("Allow camera access to scan", systemImage: "camera.badge.ellipsis").scannerMessageStyle()
         case .denied:
@@ -136,7 +135,7 @@ struct BarcodeScannerView: View {
                 Button("Try again") { resetForNextScan() }
             }.scannerPanelStyle()
         } else if cameraState == .ready {
-            Text("Place one barcode inside the frame. Detection will pause for confirmation.")
+            Text("Point at the product barcode")
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .scannerPanelStyle()
@@ -190,8 +189,8 @@ struct BarcodeScannerView: View {
 
 struct ScannerTarget: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: 18)
-            .stroke(Color.white, style: StrokeStyle(lineWidth: 3, dash: [18, 10]))
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(Color.white.opacity(0.8), lineWidth: 1.5)
             .frame(width: ScannerGeometry.targetSize.width, height: ScannerGeometry.targetSize.height)
             .shadow(color: .black.opacity(0.7), radius: 4)
             .accessibilityHidden(true)
@@ -199,7 +198,7 @@ struct ScannerTarget: View {
 }
 
 enum ScannerCameraState: Equatable {
-    case checkingPermission, requestingPermission, ready, denied, unavailable, failed
+    case checkingPermission, requestingPermission, starting, ready, denied, unavailable, interrupted, failed
 }
 
 struct BarcodeDetectionGate {
@@ -234,72 +233,78 @@ struct ScannerCameraView: UIViewControllerRepresentable {
     }
 }
 
+/// All capture configuration and start/stop calls share one serial queue, including
+/// across successive scanner presentations. UI updates and delivery stay on main.
 final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
     var onFound: (([BarcodeCandidate]) -> Void)?
     var onStateChange: ((ScannerCameraState) -> Void)?
-
     private let session = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "com.homestead.mobile.barcode-camera")
+    private static let cameraQueue = DispatchQueue(label: "com.homestead.mobile.camera", qos: .userInitiated)
     private let previewLayer = AVCaptureVideoPreviewLayer()
     private var detectionGate = BarcodeCandidateGate()
-    private var metadataOutput: AVCaptureMetadataOutput?
-    private var videoInputPort: AVCaptureInput.Port?
-    private var previewObservation: NSKeyValueObservation?
-    private var captureObservers: [NSObjectProtocol] = []
-    private var configured = false
     private var isVisible = false
     private var wantsScanning = true
     private var generation = -1
+    private var cameraState: ScannerCameraState = .checkingPermission
+    private var captureObservers: [NSObjectProtocol] = []
+    // Access only on cameraQueue.
+    private var configured = false
     private let supportedTypes: [AVMetadataObject.ObjectType] = [.ean8, .ean13, .qr, .code128, .code39, .upce, .pdf417, .dataMatrix, .aztec, .interleaved2of5, .itf14]
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
         previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.session = session
         view.layer.addSublayer(previewLayer)
-        previewObservation = previewLayer.observe(\.isPreviewing, options: [.new]) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.capturePreviewDidChange() }
-        }
-        captureObservers.append(NotificationCenter.default.addObserver(
-            forName: .AVCaptureSessionDidStartRunning, object: session, queue: .main
-        ) { [weak self] _ in self?.capturePreviewDidChange() })
+        observe(.AVCaptureSessionInterruptionEnded) { controller in controller.startCamera() }
+        observe(.AVCaptureSessionWasInterrupted) { controller in controller.publish(.interrupted) }
         captureObservers.append(NotificationCenter.default.addObserver(
             forName: .AVCaptureSessionRuntimeError, object: session, queue: .main
         ) { [weak self] notification in
             guard let self, self.isVisible else { return }
-            self.onStateChange?(.failed)
-            #if DEBUG
-            if let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError {
-                print("[scanner] capture failed domain=\(error.domain) code=\(error.code)")
-            }
-            #endif
+            if let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError,
+               error.code == .mediaServicesWereReset { self.startCamera() }
+            else { self.publish(.failed) }
         })
-        prepareCamera()
+        captureObservers.append(NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self, self.isVisible else { return }
+            self.prepareCamera()
+        })
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         isVisible = true
-        updateSessionRunningState()
+        prepareCamera()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // SwiftUI may replace the callback during sheet presentation. Replay state.
+        publish(cameraState)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         previewLayer.frame = view.bounds
-        updateRegionOfInterest()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         isVisible = false
-        sessionQueue.async { [session] in
+        Self.cameraQueue.async { [session] in
             if session.isRunning { session.stopRunning() }
         }
     }
 
     deinit {
-        previewObservation?.invalidate()
         for observer in captureObservers { NotificationCenter.default.removeObserver(observer) }
+        Self.cameraQueue.async { [session] in
+            if session.isRunning { session.stopRunning() }
+        }
     }
 
     func setScanning(_ enabled: Bool, generation: Int) {
@@ -307,86 +312,89 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         if self.generation != generation {
             self.generation = generation
             detectionGate.reset()
+            if isVisible && enabled && cameraState == .failed { prepareCamera() }
         }
-        updateSessionRunningState()
+        // Pause delivery, not the camera. Confirm/retry must not restart hardware.
+    }
+
+    private func observe(_ name: Notification.Name, action: @escaping (ScannerViewController) -> Void) {
+        captureObservers.append(NotificationCenter.default.addObserver(forName: name, object: session, queue: .main) { [weak self] _ in
+            guard let self, self.isVisible else { return }
+            action(self)
+        })
+    }
+
+    private func publish(_ state: ScannerCameraState) {
+        cameraState = state
+        onStateChange?(state)
     }
 
     private func prepareCamera() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            configureCamera()
+        case .authorized: startCamera()
         case .notDetermined:
-            onStateChange?(.requestingPermission)
+            publish(.requestingPermission)
             AVCaptureDevice.requestAccess(for: .video) { [weak self] allowed in
                 DispatchQueue.main.async {
-                    guard let self else { return }
-                    allowed ? self.configureCamera() : self.onStateChange?(.denied)
+                    guard let self, self.isVisible else { return }
+                    allowed ? self.startCamera() : self.publish(.denied)
                 }
             }
-        case .denied, .restricted:
-            onStateChange?(.denied)
-        @unknown default:
-            onStateChange?(.failed)
+        case .denied, .restricted: publish(.denied)
+        @unknown default: publish(.failed)
         }
     }
 
-    private func configureCamera() {
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
-            onStateChange?(.unavailable)
-            return
-        }
-        if (try? device.lockForConfiguration()) != nil {
-            if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
-            if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
-            device.unlockForConfiguration()
-        }
-        guard let input = try? AVCaptureDeviceInput(device: device) else {
-            onStateChange?(.failed)
-            return
-        }
-        let output = AVCaptureMetadataOutput()
-        guard session.canAddInput(input), session.canAddOutput(output) else {
-            onStateChange?(.failed)
-            return
-        }
-        session.beginConfiguration()
-        if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
-        session.addInput(input)
-        session.addOutput(output)
-        output.setMetadataObjectsDelegate(self, queue: .main)
-        output.rectOfInterest = ScannerGeometry.fullFrameRegion
-        metadataOutput = output
-        videoInputPort = input.ports.first(where: { $0.mediaType == .video })
-        if let videoInputPort {
-            captureObservers.append(NotificationCenter.default.addObserver(
-                forName: .AVCaptureInputPortFormatDescriptionDidChange, object: videoInputPort, queue: .main
-            ) { [weak self] _ in self?.capturePreviewDidChange() })
-        }
-        session.commitConfiguration()
-        configureMetadataTypes()
-        previewLayer.session = session
-        configured = true
-        updateSessionRunningState()
-    }
-
-    private func updateSessionRunningState() {
-        guard configured else { return }
-        let shouldRun = wantsScanning && isVisible
-        sessionQueue.async { [weak self, session] in
-            if shouldRun, !session.isRunning {
-                session.startRunning()
-                DispatchQueue.main.async { self?.capturePreviewDidChange() }
-            } else if !shouldRun, session.isRunning {
-                session.stopRunning()
+    private func startCamera() {
+        guard isVisible else { return }
+        publish(.starting)
+        Self.cameraQueue.async { [weak self] in
+            guard let self else { return }
+            let result = self.configureAndStart()
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isVisible else { return }
+                self.publish(result)
             }
         }
     }
 
-    func metadataOutput(
-        _ output: AVCaptureMetadataOutput,
-        didOutput metadataObjects: [AVMetadataObject],
-        from connection: AVCaptureConnection
-    ) {
+    private func configureAndStart() -> ScannerCameraState {
+        if !configured {
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else { return .unavailable }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+                if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+                if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .near }
+                device.isSubjectAreaChangeMonitoringEnabled = true
+                device.unlockForConfiguration()
+                let input = try AVCaptureDeviceInput(device: device)
+                let output = AVCaptureMetadataOutput()
+                session.beginConfiguration()
+                if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
+                guard session.canAddInput(input) else { session.commitConfiguration(); return .failed }
+                session.addInput(input)
+                guard session.canAddOutput(output) else {
+                    session.removeInput(input); session.commitConfiguration(); return .failed
+                }
+                session.addOutput(output)
+                output.setMetadataObjectsDelegate(self, queue: .main)
+                // The whole image is searchable. The aiming guide is never a hidden crop.
+                output.rectOfInterest = ScannerGeometry.fullFrameRegion
+                session.commitConfiguration()
+                output.metadataObjectTypes = supportedTypes.filter { output.availableMetadataObjectTypes.contains($0) }
+                guard !output.metadataObjectTypes.isEmpty else {
+                    session.beginConfiguration(); session.removeOutput(output); session.removeInput(input); session.commitConfiguration()
+                    return .failed
+                }
+                configured = true
+            } catch { return .failed }
+        }
+        if !session.isRunning { session.startRunning() }
+        return session.isRunning ? .ready : .failed
+    }
+
+    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         guard wantsScanning, isVisible else { return }
         let candidates = metadataObjects.compactMap { object -> BarcodeCandidate? in
             guard let code = object as? AVMetadataMachineReadableCodeObject,
@@ -394,58 +402,10 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
             return BarcodeCandidate(barcode: barcode, symbology: Self.symbology(code.type))
         }
         guard let accepted = detectionGate.accept(candidates) else { return }
-        #if DEBUG
-        print("[scanner] detected candidates=\(accepted.count) types=\(accepted.map(\.symbology).joined(separator: ","))")
-        #endif
         wantsScanning = false
-        updateSessionRunningState()
+        publish(.ready)
         onFound?(accepted)
     }
-    private func capturePreviewDidChange() {
-        guard configured, isVisible, session.isRunning else { return }
-        configureMetadataTypes()
-        updateRegionOfInterest()
-        if previewLayer.isPreviewing, metadataOutput?.metadataObjectTypes.isEmpty == false { onStateChange?(.ready) }
-    }
-
-    private func configureMetadataTypes() {
-        guard let metadataOutput else { return }
-        // Capabilities belong to the connected input port. Read them after the
-        // configuration commits, and again when that port starts delivering video.
-        let types = supportedTypes.filter { metadataOutput.availableMetadataObjectTypes.contains($0) }
-        if metadataOutput.metadataObjectTypes != types { metadataOutput.metadataObjectTypes = types }
-    }
-
-    private func updateRegionOfInterest() {
-        guard configured, let metadataOutput else { return }
-        let dimensions: CGSize
-        if let format = videoInputPort?.formatDescription {
-            let video = CMVideoFormatDescriptionGetDimensions(format)
-            dimensions = CGSize(width: CGFloat(video.width), height: CGFloat(video.height))
-        } else {
-            dimensions = .zero
-        }
-        // Converting before capture has established its preview transform can
-        // produce an empty ROI (and a singular-matrix warning), suppressing all codes.
-        guard ScannerGeometry.canConvertRegion(
-            viewBounds: view.bounds, previewBounds: previewLayer.bounds,
-            videoDimensions: dimensions, sessionRunning: session.isRunning,
-            previewing: previewLayer.isPreviewing
-        ) else {
-            metadataOutput.rectOfInterest = ScannerGeometry.fullFrameRegion
-            return
-        }
-        let target = ScannerGeometry.targetRect(in: view.bounds)
-        let converted = previewLayer.metadataOutputRectConverted(fromLayerRect: target)
-        let region = ScannerGeometry.validatedRegion(converted)
-        if metadataOutput.rectOfInterest != region {
-            metadataOutput.rectOfInterest = region
-            #if DEBUG
-            print("[scanner] preview ready region=\(region) video=\(Int(dimensions.width))x\(Int(dimensions.height))")
-            #endif
-        }
-    }
-
     private static func symbology(_ type: AVMetadataObject.ObjectType) -> String {
         switch type {
         case .code128: return "code128"
@@ -480,24 +440,6 @@ enum ScannerGeometry {
     static let targetSize = CGSize(width: 290, height: 170)
     static let fullFrameRegion = CGRect(x: 0, y: 0, width: 1, height: 1)
 
-    static func canConvertRegion(viewBounds: CGRect, previewBounds: CGRect, videoDimensions: CGSize,
-                                 sessionRunning: Bool, previewing: Bool) -> Bool {
-        sessionRunning && previewing && validArea(viewBounds) && validArea(previewBounds) &&
-        videoDimensions.width.isFinite && videoDimensions.height.isFinite &&
-        videoDimensions.width > 0 && videoDimensions.height > 0
-    }
-
-    static func validatedRegion(_ converted: CGRect) -> CGRect {
-        guard validArea(converted) else { return fullFrameRegion }
-        let clipped = converted.intersection(fullFrameRegion)
-        return validArea(clipped) ? clipped : fullFrameRegion
-    }
-
-    private static func validArea(_ rect: CGRect) -> Bool {
-        !rect.isNull && !rect.isInfinite &&
-        [rect.origin.x, rect.origin.y, rect.size.width, rect.size.height].allSatisfy(\.isFinite) &&
-        rect.size.width > 0 && rect.size.height > 0
-    }
     static func targetRect(in bounds: CGRect) -> CGRect {
         let width = min(targetSize.width, bounds.width)
         let height = min(targetSize.height, bounds.height)
@@ -507,14 +449,11 @@ enum ScannerGeometry {
 
 extension View {
     func scannerMessageStyle() -> some View {
-        padding(12)
-            .foregroundStyle(.white)
-            .background(.black.opacity(0.76), in: RoundedRectangle(cornerRadius: 12))
+        padding(.vertical, 4)
     }
 
     func scannerPanelStyle() -> some View {
         frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+            .padding(.vertical, 4)
     }
 }

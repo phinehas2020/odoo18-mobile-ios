@@ -71,6 +71,7 @@ struct SettingsView: View {
             }
 
             Section(header: Text("Sync and support")) {
+                NavigationLink("Test barcode scanner") { ScannerTestView() }
                 LabeledContent("Last synced", value: diagnostics.lastSync?.formatted(date: .abbreviated, time: .shortened) ?? "Not yet")
                 LabeledContent("Waiting to sync", value: "\(diagnostics.outboxCount)").monospacedDigit()
                 if syncEngine.failedOutboxCount > 0 {

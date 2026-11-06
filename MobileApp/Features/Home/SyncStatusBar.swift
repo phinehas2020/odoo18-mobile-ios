@@ -1,25 +1,12 @@
 import SwiftUI
 
 enum WorkplaceTheme {
-    static let accent = adaptive(light: UIColor(red: 0.13, green: 0.34, blue: 0.27, alpha: 1),
-                                 dark: UIColor(red: 0.46, green: 0.76, blue: 0.62, alpha: 1))
-    static let canvas = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.075, green: 0.09, blue: 0.082, alpha: 1)
-            : UIColor(red: 0.963, green: 0.957, blue: 0.939, alpha: 1)
-    })
-    static let surface = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.115, green: 0.135, blue: 0.122, alpha: 1)
-            : UIColor(red: 1, green: 0.997, blue: 0.984, alpha: 1)
-    })
-    static let rule = Color.primary.opacity(0.10)
-    // Filled controls retain white text in dark mode, so their fill must stay dark.
-    static let buttonFill = Color(uiColor: UIColor { traits in
-        traits.accessibilityContrast == .high
-            ? UIColor(red: 0.07, green: 0.25, blue: 0.18, alpha: 1)
-            : UIColor(red: 0.13, green: 0.34, blue: 0.27, alpha: 1)
-    })
+    static let accent = adaptive(light: UIColor(red: 0.0, green: 0.30, blue: 0.70, alpha: 1),
+                                 dark: UIColor(red: 0.45, green: 0.72, blue: 1, alpha: 1))
+    static let canvas = Color(uiColor: .systemGroupedBackground)
+    static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    static let rule = Color(uiColor: .separator)
+    static let buttonFill = Color(uiColor: UIColor(red: 0.0, green: 0.30, blue: 0.70, alpha: 1))
     static let dangerFill = Color(uiColor: UIColor { traits in
         traits.accessibilityContrast == .high
             ? UIColor(red: 0.52, green: 0.08, blue: 0.10, alpha: 1)
@@ -91,13 +78,13 @@ struct WorkplaceActionLabel: View {
         HStack(spacing: 14) {
             if !textSize.isAccessibilitySize { WorkplaceIcon(symbol: symbol) }
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.body.weight(emphasized ? .semibold : .medium)).foregroundStyle(.primary)
+                Text(title).font(.body).foregroundStyle(.primary)
                 if let subtitle {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-        }.padding(.vertical, emphasized ? 10 : 5).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }.padding(.vertical, 2).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .accessibilityElement(children: .combine)
     }
 }
@@ -151,9 +138,7 @@ struct WorkplaceNotice: View {
 
 extension View {
     func workplaceScreen() -> some View {
-        scrollContentBackground(.hidden).background(WorkplaceTheme.canvas)
-            .tint(WorkplaceTheme.accent)
-            .toolbarBackground(WorkplaceTheme.canvas, for: .navigationBar)
+        background(WorkplaceTheme.canvas).tint(WorkplaceTheme.accent)
     }
 
     @ViewBuilder
@@ -162,18 +147,17 @@ extension View {
             safeAreaInset(edge: .bottom, spacing: 0) {
                 content()
                     .padding(.horizontal, 20).padding(.vertical, 12)
-                    .background(WorkplaceTheme.surface)
-                    .overlay(alignment: .top) { Rectangle().fill(WorkplaceTheme.rule).frame(height: 0.5) }
+                    .background(.bar)
             }
         } else { self }
     }
 
     func workplaceProminentControl() -> some View {
-        buttonStyle(WorkplacePrimaryButtonStyle())
+        buttonStyle(.borderedProminent).tint(WorkplaceTheme.buttonFill).controlSize(.large)
     }
 
     func workplaceSecondaryControl() -> some View {
-        buttonStyle(WorkplaceSecondaryButtonStyle())
+        buttonStyle(.bordered).controlSize(.large)
     }
 
 }
@@ -205,20 +189,6 @@ struct SyncStatusBar: View {
     }
 }
 
-// Shared task controls keep their shape and contrast across supported iOS versions.
-struct WorkplacePrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .padding(.horizontal, 14).padding(.vertical, 2)
-            .foregroundStyle(isEnabled ? Color.white : Color.secondary)
-            .background(isEnabled ? WorkplaceTheme.buttonFill : Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-            .opacity(configuration.isPressed ? 0.76 : 1)
-    }
-}
-
 struct WorkplaceFilterButton: View {
     let title: String
     let selected: Bool
@@ -234,19 +204,5 @@ struct WorkplaceFilterButton: View {
         }.buttonStyle(.plain)
             .fixedSize(horizontal: true, vertical: false)
             .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-struct WorkplaceSecondaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.body.weight(.medium))
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .padding(.horizontal, 14).padding(.vertical, 2)
-            .foregroundStyle(isEnabled ? WorkplaceTheme.accent : Color.secondary)
-            .background(WorkplaceTheme.accent.opacity(isEnabled ? 0.07 : 0.03), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(WorkplaceTheme.rule, lineWidth: 0.5))
-            .opacity(configuration.isPressed ? 0.65 : 1)
     }
 }
