@@ -7,14 +7,15 @@ struct HomeView: View {
     @EnvironmentObject private var syncEngine: SyncEngine
     @EnvironmentObject private var networkMonitor: NetworkMonitor
     @StateObject private var viewModel = MenuViewModel()
-    @State private var tab = "work"
+    @State private var tab = "home"
+    @State private var homePath = NavigationPath()
     @State private var workPath = NavigationPath()
     @State private var warehousePath = NavigationPath()
     @State private var morePath = NavigationPath()
     @State private var search = ""
     @State private var selectedWebModule: MenuItem?
 
-    init(initialTab: String = "work") { _tab = State(initialValue: initialTab) }
+    init(initialTab: String = "home") { _tab = State(initialValue: initialTab) }
 
     private var hasInventory: Bool { viewModel.items.contains { $0.key == "inventory" } }
     private var hasManufacturing: Bool { viewModel.items.contains { $0.key == "manufacturing" } }
@@ -62,16 +63,33 @@ struct HomeView: View {
     private var workspaceTabs: some View {
         if #available(iOS 18, *) {
             TabView(selection: $tab) {
+                Tab("Home", systemImage: "house", value: "home") { homeWorkspace }
                 Tab("Work", systemImage: "checklist", value: "work") { workWorkspace }
                 Tab("Warehouse", systemImage: "shippingbox", value: "warehouse") { warehouseWorkspace }
                 Tab("More", systemImage: "ellipsis.circle", value: "more") { moreWorkspace }
             }
         } else {
             TabView(selection: $tab) {
+                homeWorkspace.tabItem { Label("Home", systemImage: "house") }.tag("home")
                 workWorkspace.tabItem { Label("Work", systemImage: "checklist") }.tag("work")
                 warehouseWorkspace.tabItem { Label("Warehouse", systemImage: "shippingbox") }.tag("warehouse")
                 moreWorkspace.tabItem { Label("More", systemImage: "ellipsis.circle") }.tag("more")
             }
+        }
+    }
+
+    private var homeWorkspace: some View {
+        NavigationStack(path: $homePath) {
+            HomePulseView(menu: viewModel) { key in
+                switch key {
+                case "work": tab = "work"; workPath = NavigationPath()
+                case "warehouse": tab = "warehouse"
+                case "more": tab = "more"
+                default: homePath.append(key)
+                }
+            }
+            .id("\(authStore.user?.id ?? 0)-\(authStore.user?.companyId ?? 0)-\(apiProvider.client.map { String(describing: ObjectIdentifier($0)) } ?? "none")")
+            .navigationDestination(for: String.self) { destination($0) }
         }
     }
 
@@ -168,6 +186,7 @@ struct HomeView: View {
     }
     @ViewBuilder private func destination(_ key: String) -> some View {
         switch key {
+        case "unfulfilled": UnfulfilledOrdersView()
         case "inventory": InventoryView()
         case "packing": PackingView()
         case "receipts": InventoryView(scope: .receipts)
