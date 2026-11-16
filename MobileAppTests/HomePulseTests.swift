@@ -175,6 +175,40 @@ final class HomePulseTests: XCTestCase {
         }
     }
 
+    func testShippingDeadlineDecodesAndUsesCentralOnTravelingPhones() throws {
+        let data = Data(#"{"id":9,"total_items":2,"ship_by":"2026-11-17T18:00:00Z","deadline_status":"due_soon","deadline_basis":"next_business_day"}"#.utf8)
+        let order = try DateCoding.decoder.decode(FulfillmentOrder.self, from: data)
+        XCTAssertEqual(order.deadlineStatus, "due_soon")
+        XCTAssertEqual(ShippingDeadlineLabel.formatted(try XCTUnwrap(order.shipBy)), "Tue, Nov 17 at 12:00 PM Central")
+    }
+
+    func testShippingDeadlineCountsAreOptionalOnOlderServers() throws {
+        let value = try DateCoding.decoder.decode(FulfillmentPulse.self, from: Self.fulfillment)
+        XCTAssertNil(value.dueToday)
+        XCTAssertNil(value.overdue)
+        XCTAssertNil(value.orders.first?.shipBy)
+    }
+
+    func testShippingNotificationsOpenShopifyOrderAndQueue() {
+        XCTAssertEqual(DeepLinkParser.parse(userInfo: ["deeplink": ["module": "shopify", "id": 123]]), .shopifyOrder(id: 123))
+        XCTAssertEqual(DeepLinkParser.parse(userInfo: ["deeplink": ["module": "shopify"]]), .fulfillmentHome)
+        XCTAssertEqual(DeepLinkParser.parse(userInfo: ["deeplink": ["module": "shopify", "id": -1]]), .fulfillmentHome)
+    }
+
+    @MainActor func testShippingUrgencyRendersWithLargeText() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let json = ##"{"generated_at":"2026-11-16T16:00:00Z","total":3,"ready":2,"needs_review":1,"pickup":1,"due_today":1,"overdue":1,"orders":[{"id":1,"order_name":"#DEMO-1","customer_name":"Sample overdue order","total_items":3,"state":"ready_to_ship","ship_by":"2026-11-13T18:00:00Z","deadline_status":"overdue"},{"id":2,"order_name":"#DEMO-2","customer_name":"Sample order due today","total_items":2,"ship_by":"2026-11-16T18:00:00Z","deadline_status":"due_soon"},{"id":3,"order_name":"#DEMO-3","customer_name":"Sample pickup","total_items":1,"deadline_status":"pickup"}]}"##
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
+        }
+        let view = NavigationStack { UnfulfilledOrdersView() }
+            .environmentObject(APIClientProvider(client: client())).environmentObject(NetworkMonitor())
+        try await capture(view, name: "shipping-deadlines", width: 393)
+        try await capture(view.environment(\.dynamicTypeSize, .accessibility3), name: "shipping-deadlines-large", width: 393)
+        try await capture(view.environment(\.dynamicTypeSize, .accessibility3), name: "shipping-deadlines-large-orders", width: 393, scrollToBottom: true)
+        let order = try DateCoding.decoder.decode(FulfillmentOrder.self, from: Data(#"{"id":1,"total_items":2,"ship_by":"2026-11-16T18:00:00Z","deadline_status":"due_soon"}"#.utf8))
+        try await capture(ShippingDeadlineLabel(order: order).padding().environment(\.dynamicTypeSize, .accessibility3), name: "shipping-deadlines-large-label", width: 393)
+    }
+
     @MainActor private func capture<V: View>(_ view: V, name: String, width: CGFloat, scrollToBottom: Bool = false) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)

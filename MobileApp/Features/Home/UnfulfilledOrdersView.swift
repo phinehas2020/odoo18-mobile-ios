@@ -50,7 +50,12 @@ struct UnfulfilledOrdersView: View {
                     Text("\(value.ready) ready to ship · \(value.needsReview) need review · \(value.pickup) pickups")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                Text("Shopify orders synced to Odoo, oldest first. Includes orders awaiting pickup and review. Counts may lag Shopify until the next sync.")
+                if let due = model.snapshot?.dueToday, let overdue = model.snapshot?.overdue {
+                    Text("\(overdue) overdue · \(due) due today")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(overdue > 0 ? WorkplaceTheme.attention : .secondary)
+                }
+                Text("Ship by noon Central on the next business day. Weekends are skipped. Earliest deadlines first; pickups follow shipping orders.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let date = model.updatedAt {
                     Text("Updated \(date.formatted(date: .omitted, time: .shortened))\(model.error != nil || !network.isOnline ? " · may be out of date" : "")")
@@ -74,7 +79,8 @@ struct UnfulfilledOrdersView: View {
                             .font(.caption).foregroundStyle(.secondary)
                         Text(order.status).font(.caption.weight(.semibold))
                             .foregroundStyle(["error", "manual_required"].contains(order.state ?? "") ? WorkplaceTheme.attention : WorkplaceTheme.success)
-                        if let date = order.createdAt { Text(date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary) }
+                        ShippingDeadlineLabel(order: order)
+                        if let date = order.createdAt { Text("Ordered " + date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary) }
                     }.padding(.vertical, 6)
                 }
             }
@@ -96,5 +102,43 @@ struct UnfulfilledOrdersView: View {
     private func reload(nextPage: Bool = false) async {
         guard let client = api.client, network.isOnline else { return }
         await model.load(client: client, nextPage: nextPage)
+    }
+}
+
+/// Always format dispatch deadlines in the mill's timezone, including on traveling phones.
+struct ShippingDeadlineLabel: View {
+    let order: FulfillmentOrder
+    var body: some View {
+        if order.deadlineStatus == "pickup" {
+            Label("Pickup · no shipping deadline", systemImage: "bag")
+                .font(.caption).foregroundStyle(.secondary)
+        } else if let date = order.shipBy {
+            VStack(alignment: .leading, spacing: 3) {
+                if let urgency {
+                    Label(urgency, systemImage: "clock.badge.exclamationmark")
+                        .font(.caption.weight(.semibold)).foregroundStyle(WorkplaceTheme.attention)
+                }
+                Label("Ship by " + Self.formatted(date), systemImage: "calendar")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        } else {
+            Label("Ship-by date unavailable", systemImage: "questionmark.circle")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+    private var urgency: String? {
+        switch order.deadlineStatus {
+        case "overdue": return "Overdue"
+        case "due_soon": return order.deadlineBasis == "amazon" ? "Due soon" : "Due soon · by noon Central"
+        case "due_today": return order.deadlineBasis == "amazon" ? "Due today" : "Due today · by noon Central"
+        default: return nil
+        }
+    }
+    static func formatted(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.timeZone = TimeZone(identifier: "America/Chicago")
+        formatter.dateFormat = "EEE, MMM d 'at' h:mm a 'Central'"
+        return formatter.string(from: date)
     }
 }

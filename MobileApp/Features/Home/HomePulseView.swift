@@ -126,11 +126,19 @@ struct HomePulseView: View {
 
     @ViewBuilder private var attention: some View {
         let review = model.fulfillment.value?.needsReview ?? 0
+        let overdue = model.fulfillment.value?.overdue ?? 0
+        let dueToday = model.fulfillment.value?.dueToday ?? 0
         let production = model.production.value?.attention ?? 0
-        if review > 0 || production > 0 {
+        if review > 0 || production > 0 || overdue > 0 || dueToday > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Needs attention").font(.subheadline.weight(.semibold)).padding(.bottom, 6)
                     .accessibilityAddTraits(.isHeader)
+                if overdue > 0 {
+                    attentionRow("\(overdue) \(overdue == 1 ? "order is" : "orders are") overdue to ship", destination: "unfulfilled")
+                }
+                if dueToday > 0 {
+                    attentionRow("\(dueToday) \(dueToday == 1 ? "order is due" : "orders are due") to ship today", destination: "unfulfilled")
+                }
                 if review > 0 {
                     attentionRow("\(review) \(review == 1 ? "order needs" : "orders need") review", destination: "unfulfilled")
                 }

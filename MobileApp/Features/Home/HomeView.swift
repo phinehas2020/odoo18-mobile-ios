@@ -33,7 +33,7 @@ struct HomeView: View {
         .onChange(of: networkMonitor.isOnline) { _, online in
             if online { Task { await syncEngine.refresh() } }
         }
-        .onChange(of: appState.deepLink) { _, link in
+        .onChange(of: appState.deepLink, initial: true) { _, link in
             guard let link else { return }
             switch link {
             case .inventoryHome: tab = "warehouse"; warehousePath.append("inventory")
@@ -42,6 +42,8 @@ struct HomeView: View {
             case .packingShipment: tab = "warehouse"; warehousePath.append(link)
             case .manufacturingHome: tab = "work"; workPath = NavigationPath()
             case .manufacturingOrder: tab = "work"; workPath.append(link)
+            case .shopifyOrder: tab = "home"; homePath = NavigationPath(); homePath.append(link)
+            case .fulfillmentHome: tab = "home"; homePath = NavigationPath(); homePath.append("unfulfilled")
             case .salesHome: tab = "more"; morePath.append("sales")
             case .salesOrder: tab = "more"; morePath.append(link)
             case .settings: tab = "more"; morePath.append("settings")
@@ -90,6 +92,7 @@ struct HomeView: View {
             }
             .id("\(authStore.user?.id ?? 0)-\(authStore.user?.companyId ?? 0)-\(apiProvider.client.map { String(describing: ObjectIdentifier($0)) } ?? "none")")
             .navigationDestination(for: String.self) { destination($0) }
+            .navigationDestination(for: DeepLink.self) { deepDestination($0) }
         }
     }
 
@@ -206,6 +209,7 @@ struct HomeView: View {
         case .picking(let id): InventoryDetailView(pickingId: id)
         case .packingShipment(let id): PackingView(shipmentId: id)
         case .manufacturingOrder(let id): ManufacturingDetailView(orderId: id, workOrdersFirst: true)
+        case .shopifyOrder(let id): OdooWebView(title: "Order", targetURL: "/web#model=shopify.order&id=\(id)&view_type=form")
         case .salesOrder(let id): SalesOrderDetailView(orderId: id)
         case .todo(let id): TodoDetailView(taskId: id)
         default: EmptyView()

@@ -15,6 +15,9 @@ struct DeepLinkParser {
             case "manufacturing":
                 if let id { return .manufacturingOrder(id: id) }
                 return .manufacturingHome
+            case "shopify":
+                if let id, id > 0 { return .shopifyOrder(id: id) }
+                return .fulfillmentHome
             case "sales":
                 if let id { return .salesOrder(id: id) }
                 return .salesHome

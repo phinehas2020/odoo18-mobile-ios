@@ -8,9 +8,13 @@ struct FulfillmentOrder: Decodable, Identifiable {
     let state: String?
     let totalItems: Int
     let requestedShippingMethod: String?
+    var shipBy: Date? = nil
+    var deadlineStatus: String? = nil
+    var deadlineBasis: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, state
+        case shipBy = "ship_by", deadlineStatus = "deadline_status", deadlineBasis = "deadline_basis"
         case orderName = "order_name", customerName = "customer_name", createdAt = "created_at"
         case totalItems = "total_items", requestedShippingMethod = "requested_shipping_method"
     }
@@ -29,8 +33,11 @@ struct FulfillmentPulse: Decodable {
     let generatedAt: Date
     let total, ready, needsReview, pickup: Int
     var orders: [FulfillmentOrder]
+    var dueToday: Int? = nil
+    var overdue: Int? = nil
     enum CodingKeys: String, CodingKey {
         case total, ready, pickup, orders
+        case dueToday = "due_today", overdue
         case generatedAt = "generated_at", needsReview = "needs_review"
     }
 }

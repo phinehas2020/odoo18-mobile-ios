@@ -48,7 +48,7 @@ struct SettingsView: View {
                     Button { Task { await enableNotifications() } } label: {
                         HStack {
                             if requestingNotifications { ProgressView().accessibilityHidden(true) }
-                            Label("Enable assignment notifications", systemImage: "bell.badge")
+                            Label("Enable work notifications", systemImage: "bell.badge")
                         }.frame(minHeight: 44)
                     }.disabled(requestingNotifications)
                 }
@@ -59,7 +59,7 @@ struct SettingsView: View {
             } header: {
                 Text("Preferences")
             } footer: {
-                Text("Allow alerts for assigned work. You can change notification permissions in iPhone Settings.")
+                Text("Allow alerts for assigned work and shipping deadlines. You can change notification permissions in iPhone Settings.")
             }
 
             Section(header: Text("Server")) {

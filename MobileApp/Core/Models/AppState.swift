@@ -11,6 +11,8 @@ enum DeepLink: Hashable {
     case packingShipment(id: Int)
     case manufacturingHome
     case manufacturingOrder(id: Int)
+    case shopifyOrder(id: Int)
+    case fulfillmentHome
     case salesHome
     case settings
     case picking(id: Int)
